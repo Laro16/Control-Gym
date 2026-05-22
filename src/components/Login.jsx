@@ -2,12 +2,12 @@ import { useState } from 'react'
 import { signIn } from '../supabase'
 import { Dumbbell, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
-export default function Login({ onLogin }) {
-  const [email, setEmail] = useState('')
+export default function Login() {
+  const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
+  const [loading, setLoading]   = useState(false)
+  const [error, setError]       = useState('')
 
   const gymName = import.meta.env.VITE_GYM_NAME || 'GymApp'
 
@@ -17,7 +17,7 @@ export default function Login({ onLogin }) {
     setLoading(true)
     setError('')
 
-    const { data, error: err } = await signIn(email, password)
+    const { error: err } = await signIn(email, password)
 
     if (err) {
       setError('Correo o contraseña incorrectos')
@@ -25,8 +25,8 @@ export default function Login({ onLogin }) {
       return
     }
 
-    onLogin(data.user)
-    setLoading(false)
+    // No hacemos nada más aquí.
+    // onAuthStateChange en App.jsx detecta el SIGNED_IN y navega automáticamente.
   }
 
   return (
