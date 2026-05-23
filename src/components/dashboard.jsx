@@ -829,27 +829,46 @@ function CreatePaymentModal({ open, onClose }) {
   const [members, setMembers] = useState([])
   const [form, setForm] = useState({ member_id: '', amount: '', payment_method: 'cash', payment_date: today(), due_date: addDays(today(), 30), notes: '' })
   const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   useEffect(() => {
-    if (open) getMembers().then(r => setMembers(r.data || []))
+    if (open) {
+      getMembers().then(r => setMembers(r.data || []))
+      setSuccess(false)
+      setForm({ member_id: '', amount: '', payment_method: 'cash', payment_date: today(), due_date: addDays(today(), 30), notes: '' })
+    }
   }, [open])
+
+  const handleMemberChange = (memberId) => {
+    const m = members.find(x => x.id === memberId)
+    const days = m?.plan?.duration_days || 30
+    const price = m?.plan?.price || ''
+    setForm(f => ({ ...f, member_id: memberId, amount: price, due_date: addDays(today(), days) }))
+  }
 
   const handleCreate = async () => {
     if (!form.member_id || !form.amount) return
     setLoading(true)
     await createPayment({ ...form, status: 'approved' })
     setLoading(false)
-    onClose()
+    setSuccess(true)
+    setTimeout(() => { setSuccess(false); onClose() }, 1500)
   }
 
   return (
     <Modal open={open} onClose={onClose} title="Registrar pago">
+      {success ? (
+        <div className="text-center py-6">
+          <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-2" />
+          <p className="font-semibold text-white">Pago registrado correctamente</p>
+        </div>
+      ) : (
       <div className="space-y-3">
         <div>
           <label className="label">Miembro *</label>
-          <select className="input" value={form.member_id} onChange={e => setForm({ ...form, member_id: e.target.value })}>
+          <select className="input" value={form.member_id} onChange={e => handleMemberChange(e.target.value)}>
             <option value="">Seleccionar miembro</option>
-            {members.map(m => <option key={m.id} value={m.id}>{m.profile?.full_name}</option>)}
+            {members.map(m => <option key={m.id} value={m.id}>{m.profile?.full_name}{m.plan ? \` — \${m.plan.name}\` : ''}</option>)}
           </select>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -881,9 +900,15 @@ function CreatePaymentModal({ open, onClose }) {
           <input className="input" value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} />
         </div>
         <button className="btn-primary w-full" onClick={handleCreate} disabled={loading}>
-          {loading ? 'Registrando...' : 'Registrar pago'}
+          {loading ? (
+            <span className="flex items-center gap-2 justify-center">
+              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Registrando...
+            </span>
+          ) : 'Registrar pago'}
         </button>
       </div>
+      )}
     </Modal>
   )
 }
@@ -1201,12 +1226,19 @@ function UserHome({ member, payments, profile }) {
 // ── USER PAYMENTS ──────────────────────────────────────────
 function UserPayments({ payments, member, onRefresh }) {
   const [showUpload, setShowUpload] = useState(null)
+  const [uploading, setUploading] = useState(null) // paymentId que está subiendo
 
   const handleUploadVoucher = async (paymentId, file) => {
     if (!file || !member) return
+    setUploading(paymentId)
     const { url, error } = await uploadVoucher(file, member.id)
-    if (error) { alert('Error al subir el comprobante'); return }
+    if (error) {
+      alert('Error al subir el comprobante. Verifica tu conexión e intenta de nuevo.')
+      setUploading(null)
+      return
+    }
     await updatePayment(paymentId, { voucher_url: url, status: 'pending', payment_date: today() })
+    setUploading(null)
     setShowUpload(null)
     onRefresh()
   }
@@ -1246,12 +1278,17 @@ function UserPayments({ payments, member, onRefresh }) {
               {/* Acciones */}
               <div className="flex flex-wrap gap-2">
                 {p.status !== 'approved' && !p.voucher_url && p.payment_method !== 'cash' && (
-                  <>
-                    <label className="btn-secondary text-sm cursor-pointer">
-                      <Camera className="w-3.5 h-3.5" /> Subir comprobante
-                      <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && handleUploadVoucher(p.id, e.target.files[0])} />
-                    </label>
-                  </>
+                  <label className={`btn-secondary text-sm cursor-pointer ${uploading === p.id ? 'opacity-60 pointer-events-none' : ''}`}>
+                    {uploading === p.id ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-300 rounded-full animate-spin" />
+                        Subiendo...
+                      </>
+                    ) : (
+                      <><Camera className="w-3.5 h-3.5" /> Subir comprobante</>
+                    )}
+                    <input type="file" accept="image/*" className="hidden" disabled={!!uploading} onChange={e => e.target.files?.[0] && handleUploadVoucher(p.id, e.target.files[0])} />
+                  </label>
                 )}
                 {(p.voucher_url || p.payment_method === 'cash') && (
                   <button className="btn-ghost text-sm" onClick={() => sendVoucherToAdmin(p, member)}>
