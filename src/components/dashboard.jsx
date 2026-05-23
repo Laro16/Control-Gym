@@ -1256,7 +1256,8 @@ function UserHome({ member, payments, profile }) {
 // ── USER PAYMENTS ──────────────────────────────────────────
 function UserPayments({ payments, member, onRefresh }) {
   const [showUpload, setShowUpload] = useState(null)
-  const [uploading, setUploading] = useState(null) // paymentId que está subiendo
+  const [showNewPayment, setShowNewPayment] = useState(false)
+  const [uploading, setUploading] = useState(null)
 
   const handleUploadVoucher = async (paymentId, file) => {
     if (!file || !member) return
@@ -1275,7 +1276,15 @@ function UserPayments({ payments, member, onRefresh }) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <h2 className="section-title">Mis pagos</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="section-title">Mis pagos</h2>
+        {member?.plan && (
+          <button className="btn-primary py-2 px-3 text-sm" onClick={() => setShowNewPayment(true)}>
+            <Plus className="w-4 h-4" /> Registrar Pago
+          </button>
+        )}
+      </div>
+      
       <div className="space-y-3">
         {payments.map(p => {
           const st = approvalStatusLabel[p.status]
@@ -1291,6 +1300,7 @@ function UserPayments({ payments, member, onRefresh }) {
                     <span className={dueLabel.cls}>{dueLabel.text}</span>
                   </div>
                   <p className="text-xs text-gray-500 mt-0.5">Vence: {formatDate(p.due_date)}</p>
+                  {p.notes && <p className="text-xs text-gray-400 mt-1 italic">"{p.notes}"</p>}
                 </div>
                 {p.payment_method === 'cash'
                   ? <div className="flex items-center gap-1 text-emerald-400 text-xs"><Banknote className="w-4 h-4" /> Efectivo</div>
@@ -1298,22 +1308,22 @@ function UserPayments({ payments, member, onRefresh }) {
                 }
               </div>
 
-              {/* Comprobante */}
+              {/* Comprobante con opción de Ver/Descargar */}
               {p.voucher_url && (
-                <div className="rounded-xl overflow-hidden bg-gray-800">
+                <div className="rounded-xl overflow-hidden bg-gray-800 relative group">
                   <img src={p.voucher_url} alt="comprobante" className="w-full max-h-48 object-cover" />
+                  <a href={p.voucher_url} target="_blank" rel="noreferrer" download className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium gap-2 backdrop-blur-sm">
+                    <Eye className="w-5 h-5" /> Ver / Descargar
+                  </a>
                 </div>
               )}
 
               {/* Acciones */}
               <div className="flex flex-wrap gap-2">
                 {p.status !== 'approved' && !p.voucher_url && p.payment_method !== 'cash' && (
-                  <label className={`btn-secondary text-sm cursor-pointer ${uploading === p.id ? 'opacity-60 pointer-events-none' : ''}`}>
+                  <label className={`btn-secondary text-sm cursor-pointer flex-1 ${uploading === p.id ? 'opacity-60 pointer-events-none' : ''}`}>
                     {uploading === p.id ? (
-                      <>
-                        <span className="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-300 rounded-full animate-spin" />
-                        Subiendo...
-                      </>
+                      <><span className="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-300 rounded-full animate-spin" /> Subiendo...</>
                     ) : (
                       <><Camera className="w-3.5 h-3.5" /> Subir comprobante</>
                     )}
@@ -1321,8 +1331,11 @@ function UserPayments({ payments, member, onRefresh }) {
                   </label>
                 )}
                 {(p.voucher_url || p.payment_method === 'cash') && (
-                  <button className="btn-ghost text-sm" onClick={() => sendVoucherToAdmin(p, member)}>
-                    <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                  <button 
+                    className={p.status === 'pending' ? "btn-primary text-sm flex-1" : "btn-ghost text-sm"} 
+                    onClick={() => sendVoucherToAdmin(p, member)}
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" /> {p.status === 'pending' ? 'Notificar al Admin' : 'WhatsApp'}
                   </button>
                 )}
                 <button className="btn-ghost text-sm" onClick={() => generatePaymentPDF(p, member)}>
@@ -1339,7 +1352,153 @@ function UserPayments({ payments, member, onRefresh }) {
           </div>
         )}
       </div>
+
+      <UserCreatePaymentModal 
+        open={showNewPayment} 
+        onClose={() => setShowNewPayment(false)} 
+        member={member} 
+        lastPayment={payments[0]} 
+        onRefresh={onRefresh} 
+      />
     </div>
+  )
+}
+
+function UserCreatePaymentModal({ open, onClose, member, lastPayment, onRefresh }) {
+  const [months, setMonths] = useState(1)
+  const [file, setFile] = useState(null)
+  const [preview, setPreview] = useState(null)
+  const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
+
+  const price = member?.plan?.price || 0
+  const duration = member?.plan?.duration_days || 30
+  const total = price * months
+
+  if (!open) return null
+
+  const handleFileChange = (e) => {
+    const f = e.target.files?.[0]
+    if (f) {
+      setFile(f)
+      setPreview(URL.createObjectURL(f))
+    }
+  }
+
+  const handleSubmit = async () => {
+    if (!file) {
+      alert('Debes subir la foto de tu comprobante de pago')
+      return
+    }
+    setLoading(true)
+
+    // Subir imagen
+    const { url, error: uploadErr } = await uploadVoucher(file, member.id)
+    if (uploadErr) {
+      alert('Error al subir el comprobante. Intenta de nuevo.')
+      setLoading(false)
+      return
+    }
+
+    // Calcular próxima fecha de vencimiento
+    let baseDate = lastPayment && getPaymentStatus(lastPayment.due_date) !== 'overdue' 
+      ? lastPayment.due_date 
+      : today()
+    let newDueDate = addDays(baseDate, months * duration)
+
+    // Crear pago
+    await createPayment({
+      member_id: member.id,
+      amount: total,
+      payment_date: today(),
+      due_date: newDueDate,
+      payment_method: 'deposit',
+      status: 'pending',
+      voucher_url: url,
+      notes: `Adelanto de ${months} cuota(s)`
+    })
+
+    setLoading(false)
+    setSuccess(true)
+    setTimeout(() => {
+      setSuccess(false)
+      setFile(null)
+      setPreview(null)
+      setMonths(1)
+      onRefresh()
+      onClose()
+    }, 1500)
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Registrar Nuevo Pago">
+      {success ? (
+        <div className="text-center py-6">
+          <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-2" />
+          <p className="font-semibold text-white">Pago registrado correctamente</p>
+          <p className="text-sm text-gray-400 mt-1">El administrador lo revisará pronto.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex items-center justify-between">
+            <div>
+              <p className="text-sm text-brand-400 font-medium">Plan: {member.plan.name}</p>
+              <p className="text-xs text-gray-400">Duración base: {duration} días</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-gray-400">Costo mensual</p>
+              <p className="text-lg font-bold text-white">{formatCurrency(price)}</p>
+            </div>
+          </div>
+
+          <div>
+            <label className="label">¿Cuántas cuotas deseas pagar?</label>
+            <select className="input" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
+              {[1, 2, 3, 4, 5, 6, 12].map(num => (
+                <option key={num} value={num}>{num} cuota(s) — Cubre {num * duration} días</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex justify-between items-center bg-gray-800/50 p-3 rounded-xl border border-gray-700">
+            <span className="text-sm text-gray-300">Total a pagar:</span>
+            <span className="text-2xl font-bold text-white">{formatCurrency(total)}</span>
+          </div>
+
+          <div>
+            <label className="label">Subir comprobante (Obligatorio)</label>
+            <div className="mt-2 flex justify-center rounded-xl border border-dashed border-gray-700 px-6 py-8 hover:border-brand-500/50 transition-colors bg-gray-900">
+              <div className="text-center">
+                {preview ? (
+                  <div className="space-y-3">
+                    <img src={preview} alt="Vista previa" className="mx-auto h-32 w-auto rounded-lg object-cover" />
+                    <label className="btn-secondary text-sm cursor-pointer inline-flex">
+                      Cambiar foto
+                      <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
+                    </label>
+                  </div>
+                ) : (
+                  <>
+                    <Camera className="mx-auto h-8 w-8 text-gray-500" aria-hidden="true" />
+                    <div className="mt-4 flex text-sm leading-6 text-gray-400 justify-center">
+                      <label className="relative cursor-pointer rounded-md font-semibold text-brand-500 hover:text-brand-400">
+                        <span>Sube un archivo</span>
+                        <input type="file" className="sr-only" accept="image/*" onChange={handleFileChange} />
+                      </label>
+                    </div>
+                    <p className="text-xs leading-5 text-gray-500 mt-1">PNG, JPG, GIF</p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <button className="btn-primary w-full mt-2" onClick={handleSubmit} disabled={loading || !file}>
+            {loading ? 'Procesando...' : 'Registrar Pago'}
+          </button>
+        </div>
+      )}
+    </Modal>
   )
 }
 
@@ -1428,9 +1587,12 @@ function UserBody({ measurements, photos, member, onRefresh }) {
           </label>
           <div className="grid grid-cols-2 gap-3">
             {photos.map(p => (
-              <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square bg-gray-800">
+              <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square bg-gray-800 group">
                 <img src={p.photo_url} alt="progreso" className="w-full h-full object-cover" />
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 px-2 py-2">
+                <a href={p.photo_url} target="_blank" rel="noreferrer" download className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-sm">
+                  <Download className="w-6 h-6" />
+                </a>
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 px-2 py-2 pointer-events-none">
                   <p className="text-xs text-white">{formatDate(p.photo_date)}</p>
                 </div>
               </div>
