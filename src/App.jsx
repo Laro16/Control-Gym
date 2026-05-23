@@ -3,7 +3,7 @@ import { supabase, signOut } from './supabase'
 import Login from './components/Login'
 import { AdminDashboard, UserDashboard } from './components/dashboard'
 
-async function fetchProfileWithRetry(userId, attempts = 6) {
+async function fetchProfileWithRetry(userId, attempts = 5) {
   for (let i = 0; i < attempts; i++) {
     const { data } = await supabase
       .from('profiles')
@@ -11,7 +11,7 @@ async function fetchProfileWithRetry(userId, attempts = 6) {
       .eq('id', userId)
       .single()
     if (data) return data
-    await new Promise(r => setTimeout(r, 1000))
+    await new Promise(r => setTimeout(r, 800))
   }
   return null
 }
@@ -21,17 +21,36 @@ export default function App() {
   const [profile, setProfile] = useState(null)
 
   useEffect(() => {
-    // Solo usamos onAuthStateChange como fuente única de verdad.
-    // SIGNED_IN se dispara tanto al login como al recargar la página con sesión activa.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+
+        // Cerró sesión → ir al login
         if (event === 'SIGNED_OUT' || !session) {
           setProfile(null)
           setStatus('login')
           return
         }
 
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+        // TOKEN_REFRESHED ocurre cuando vuelves a la pestaña.
+        // Si ya tenemos el perfil cargado, NO hacemos nada.
+        // Solo recargamos si realmente no hay perfil.
+        if (event === 'TOKEN_REFRESHED') {
+          setStatus(prev => {
+            // Si ya estaba 'ready', lo dejamos así
+            if (prev === 'ready') return 'ready'
+            return prev
+          })
+          return
+        }
+
+        // INITIAL_SESSION o SIGNED_IN → cargar perfil
+        if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+          // Si ya tenemos perfil del mismo usuario, no volvemos a cargar
+          if (profile?.id === session.user.id) {
+            setStatus('ready')
+            return
+          }
+
           setStatus('loading')
           const data = await fetchProfileWithRetry(session.user.id)
           if (data) {
@@ -44,11 +63,10 @@ export default function App() {
       }
     )
     return () => subscription.unsubscribe()
-  }, [])
+  }, [profile]) // profile en dependencias para el check de mismo usuario
 
   const handleLogout = async () => {
     await signOut()
-    // onAuthStateChange se encarga del resto
   }
 
   // ── RENDER ────────────────────────────────────────────────
