@@ -12,13 +12,14 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Cliente admin — SOLO para crear usuarios sin afectar la sesión activa
-// Usa la service_role key que bypasea RLS y no hace login automático
+// storageKey diferente evita el warning de "multiple GoTrueClient instances"
 const supabaseAdmin = supabaseServiceKey
   ? createClient(supabaseUrl, supabaseServiceKey, {
       auth: {
         autoRefreshToken: false,
-        persistSession: false,      // ← clave: no guarda sesión en localStorage
+        persistSession: false,
         detectSessionInUrl: false,
+        storageKey: 'gymapp-admin-auth',
       }
     })
   : null
