@@ -1,13 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseUrl      = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey  = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Faltan las variables de entorno VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
+  throw new Error('Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
 }
 
+// Cliente normal — para todo el uso general
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Cliente admin — SOLO para crear usuarios sin afectar la sesión activa
+// Usa la service_role key que bypasea RLS y no hace login automático
+const supabaseAdmin = supabaseServiceKey
+  ? createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,      // ← clave: no guarda sesión en localStorage
+        detectSessionInUrl: false,
+      }
+    })
+  : null
 
 // ── AUTENTICACIÓN ──────────────────────────────────────────
 export const signIn = (email, password) =>
@@ -24,6 +38,22 @@ export const getProfile = async (userId) => {
     .select('*')
     .eq('id', userId)
     .single()
+  return { data, error }
+}
+
+// ── CREAR USUARIO SIN AFECTAR SESIÓN DEL ADMIN ────────────
+export const adminCreateUser = async (email, password, fullName) => {
+  if (!supabaseAdmin) {
+    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
+  }
+
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,           // ← confirma el email automáticamente, sin email
+    user_metadata: { full_name: fullName, role: 'user' }
+  })
+
   return { data, error }
 }
 
@@ -53,28 +83,6 @@ export const getMemberByProfile = async (profileId) => {
   return { data, error }
 }
 
-export const createMember = async (profileData, memberData) => {
-  // 1) Crear usuario en Supabase Auth
-  const { data: authData, error: authError } = await supabase.auth.admin
-    ? await supabase.auth.admin.createUser({
-        email: profileData.email,
-        password: profileData.password,
-        user_metadata: { full_name: profileData.full_name, role: 'user' }
-      })
-    : { data: null, error: new Error('Usa el método signUp desde el panel') }
-
-  if (authError) return { error: authError }
-
-  // 2) Crear el miembro
-  const { data, error } = await supabase
-    .from('members')
-    .insert({ ...memberData, profile_id: authData.user.id })
-    .select()
-    .single()
-
-  return { data, error }
-}
-
 export const updateMember = async (id, updates) => {
   const { data, error } = await supabase
     .from('members')
@@ -86,7 +94,10 @@ export const updateMember = async (id, updates) => {
 }
 
 export const deleteMember = async (id) => {
-  const { error } = await supabase.from('members').delete().eq('id', id)
+  const { error } = await supabase
+    .from('members')
+    .update({ status: 'inactive' })
+    .eq('id', id)
   return { error }
 }
 
@@ -96,9 +107,7 @@ export const getPayments = async (memberId = null) => {
     .from('payments')
     .select(`*, member:members(*, profile:profiles(*))`)
     .order('due_date', { ascending: false })
-
   if (memberId) query = query.eq('member_id', memberId)
-
   const { data, error } = await query
   return { data, error }
 }
@@ -125,7 +134,7 @@ export const updatePayment = async (id, updates) => {
 export const uploadVoucher = async (file, memberId) => {
   const ext = file.name.split('.').pop()
   const path = `${memberId}/${Date.now()}.${ext}`
-  const { data, error } = await supabase.storage
+  const { error } = await supabase.storage
     .from('vouchers')
     .upload(path, file, { upsert: false })
   if (error) return { error }
@@ -229,14 +238,6 @@ export const getNotifications = async (profileId) => {
     .order('created_at', { ascending: false })
     .limit(50)
   return { data, error }
-}
-
-export const markNotificationRead = async (id) => {
-  const { error } = await supabase
-    .from('notifications')
-    .update({ is_read: true })
-    .eq('id', id)
-  return { error }
 }
 
 export const markAllNotificationsRead = async (profileId) => {
