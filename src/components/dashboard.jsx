@@ -1255,7 +1255,6 @@ function UserHome({ member, payments, profile }) {
 
 // ── USER PAYMENTS ──────────────────────────────────────────
 function UserPayments({ payments, member, onRefresh }) {
-  const [showUpload, setShowUpload] = useState(null)
   const [showNewPayment, setShowNewPayment] = useState(false)
   const [uploading, setUploading] = useState(null)
 
@@ -1269,8 +1268,13 @@ function UserPayments({ payments, member, onRefresh }) {
       return
     }
     await updatePayment(paymentId, { voucher_url: url, status: 'pending', payment_date: today() })
+    await createNotification({
+      profile_id: member.profile_id,
+      type: 'custom',
+      title: 'Comprobante enviado al administrador',
+      message: 'Tu comprobante fue enviado. El administrador lo revisará pronto.',
+    })
     setUploading(null)
-    setShowUpload(null)
     onRefresh()
   }
 
@@ -1278,13 +1282,11 @@ function UserPayments({ payments, member, onRefresh }) {
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <h2 className="section-title">Mis pagos</h2>
-        {member?.plan && (
-          <button className="btn-primary py-2 px-3 text-sm" onClick={() => setShowNewPayment(true)}>
-            <Plus className="w-4 h-4" /> Registrar Pago
-          </button>
-        )}
+        <button className="btn-primary text-sm" onClick={() => setShowNewPayment(true)}>
+          <Plus className="w-4 h-4" /> Registrar pago
+        </button>
       </div>
-      
+
       <div className="space-y-3">
         {payments.map(p => {
           const st = approvalStatusLabel[p.status]
@@ -1299,8 +1301,10 @@ function UserPayments({ payments, member, onRefresh }) {
                     <span className={st.cls}>{st.text}</span>
                     <span className={dueLabel.cls}>{dueLabel.text}</span>
                   </div>
-                  <p className="text-xs text-gray-500 mt-0.5">Vence: {formatDate(p.due_date)}</p>
-                  {p.notes && <p className="text-xs text-gray-400 mt-1 italic">"{p.notes}"</p>}
+                  <p className="text-xs text-gray-500 mt-0.5">
+                    {p.notes && <span className="text-gray-400">{p.notes} · </span>}
+                    Vence: {formatDate(p.due_date)}
+                  </p>
                 </div>
                 {p.payment_method === 'cash'
                   ? <div className="flex items-center gap-1 text-emerald-400 text-xs"><Banknote className="w-4 h-4" /> Efectivo</div>
@@ -1308,36 +1312,59 @@ function UserPayments({ payments, member, onRefresh }) {
                 }
               </div>
 
-              {/* Comprobante con opción de Ver/Descargar */}
+              {/* Comprobante imagen */}
               {p.voucher_url && (
                 <div className="rounded-xl overflow-hidden bg-gray-800 relative group">
-                  <img src={p.voucher_url} alt="comprobante" className="w-full max-h-48 object-cover" />
-                  <a href={p.voucher_url} target="_blank" rel="noreferrer" download className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white font-medium gap-2 backdrop-blur-sm">
-                    <Eye className="w-5 h-5" /> Ver / Descargar
+                  <img src={p.voucher_url} alt="comprobante" className="w-full max-h-56 object-cover" />
+                  <a
+                    href={p.voucher_url}
+                    target="_blank"
+                    rel="noreferrer"
+                    download
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Download className="w-3 h-3" /> Ver/Descargar
                   </a>
+                </div>
+              )}
+
+              {/* Estado aprobado */}
+              {p.status === 'approved' && (
+                <div className="flex items-center gap-2 text-emerald-400 text-sm bg-emerald-500/10 rounded-xl px-3 py-2">
+                  <CheckCircle className="w-4 h-4 flex-shrink-0" />
+                  Pago aprobado por el administrador
+                </div>
+              )}
+
+              {/* Estado rechazado */}
+              {p.status === 'rejected' && (
+                <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 rounded-xl px-3 py-2">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                  Pago rechazado. Contacta al administrador.
                 </div>
               )}
 
               {/* Acciones */}
               <div className="flex flex-wrap gap-2">
-                {p.status !== 'approved' && !p.voucher_url && p.payment_method !== 'cash' && (
-                  <label className={`btn-secondary text-sm cursor-pointer flex-1 ${uploading === p.id ? 'opacity-60 pointer-events-none' : ''}`}>
+                {/* Subir voucher si es transferencia/depósito y no ha sido aprobado */}
+                {p.status === 'pending' && !p.voucher_url && p.payment_method !== 'cash' && (
+                  <label className={`btn-secondary text-sm cursor-pointer ${uploading === p.id ? 'opacity-60 pointer-events-none' : ''}`}>
                     {uploading === p.id ? (
-                      <><span className="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-300 rounded-full animate-spin" /> Subiendo...</>
+                      <><span className="w-3.5 h-3.5 border-2 border-gray-400/30 border-t-gray-300 rounded-full animate-spin" />Subiendo...</>
                     ) : (
                       <><Camera className="w-3.5 h-3.5" /> Subir comprobante</>
                     )}
-                    <input type="file" accept="image/*" className="hidden" disabled={!!uploading} onChange={e => e.target.files?.[0] && handleUploadVoucher(p.id, e.target.files[0])} />
+                    <input type="file" accept="image/*" capture="environment" className="hidden" disabled={!!uploading}
+                      onChange={e => e.target.files?.[0] && handleUploadVoucher(p.id, e.target.files[0])} />
                   </label>
                 )}
-                {(p.voucher_url || p.payment_method === 'cash') && (
-                  <button 
-                    className={p.status === 'pending' ? "btn-primary text-sm flex-1" : "btn-ghost text-sm"} 
-                    onClick={() => sendVoucherToAdmin(p, member)}
-                  >
-                    <MessageCircle className="w-3.5 h-3.5" /> {p.status === 'pending' ? 'Notificar al Admin' : 'WhatsApp'}
+                {/* Enviar por WhatsApp al admin */}
+                {(p.voucher_url || p.payment_method === 'cash') && p.status !== 'approved' && (
+                  <button className="btn-ghost text-sm" onClick={() => sendVoucherToAdmin(p, member)}>
+                    <MessageCircle className="w-3.5 h-3.5" /> Enviar al admin
                   </button>
                 )}
+                {/* Descargar PDF */}
                 <button className="btn-ghost text-sm" onClick={() => generatePaymentPDF(p, member)}>
                   <Download className="w-3.5 h-3.5" /> PDF
                 </button>
@@ -1345,156 +1372,243 @@ function UserPayments({ payments, member, onRefresh }) {
             </div>
           )
         })}
+
         {payments.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            Sin historial de pagos
+            <p>Sin historial de pagos</p>
+            <p className="text-xs mt-1">Registra tu primer pago con el botón de arriba</p>
           </div>
         )}
       </div>
 
-      <UserCreatePaymentModal 
-        open={showNewPayment} 
-        onClose={() => setShowNewPayment(false)} 
-        member={member} 
-        lastPayment={payments[0]} 
-        onRefresh={onRefresh} 
+      <NewPaymentModal
+        open={showNewPayment}
+        onClose={() => setShowNewPayment(false)}
+        member={member}
+        existingPayments={payments}
+        onRefresh={onRefresh}
       />
     </div>
   )
 }
 
-function UserCreatePaymentModal({ open, onClose, member, lastPayment, onRefresh }) {
-  const [months, setMonths] = useState(1)
-  const [file, setFile] = useState(null)
-  const [preview, setPreview] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [success, setSuccess] = useState(false)
+// ── MODAL NUEVO PAGO (usuario) ─────────────────────────────
+function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh }) {
+  const [method, setMethod]     = useState('transfer')
+  const [file, setFile]         = useState(null)
+  const [preview, setPreview]   = useState(null)
+  const [uploading, setUploading] = useState(false)
+  const [success, setSuccess]   = useState(false)
+  const [selectedMonths, setSelectedMonths] = useState([])
 
-  const price = member?.plan?.price || 0
-  const duration = member?.plan?.duration_days || 30
-  const total = price * months
+  const planPrice    = member?.plan?.price || 0
+  const planDays     = member?.plan?.duration_days || 30
+  const planName     = member?.plan?.name || 'Sin plan'
 
-  if (!open) return null
+  // Generar cuotas disponibles: mes actual + 3 meses adelante
+  const availableMonths = []
+  const paidDates = new Set(existingPayments.map(p => p.due_date?.slice(0, 7)))
+  for (let i = 0; i < 4; i++) {
+    const d = new Date()
+    d.setMonth(d.getMonth() + i)
+    const key   = d.toISOString().slice(0, 7)       // "2026-05"
+    const label = d.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })
+    const due   = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) // último día del mes
+    if (!paidDates.has(key)) {
+      availableMonths.push({ key, label, due })
+    }
+  }
+
+  const toggleMonth = (key) => {
+    setSelectedMonths(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    )
+  }
+
+  const totalAmount = selectedMonths.length * planPrice
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0]
-    if (f) {
-      setFile(f)
-      setPreview(URL.createObjectURL(f))
-    }
+    if (!f) return
+    setFile(f)
+    setPreview(URL.createObjectURL(f))
   }
 
   const handleSubmit = async () => {
-    if (!file) {
-      alert('Debes subir la foto de tu comprobante de pago')
-      return
+    if (!selectedMonths.length) { alert('Selecciona al menos una cuota'); return }
+    if (method !== 'cash' && !file) { alert('Debes subir el comprobante de pago'); return }
+    if (!member) return
+
+    setUploading(true)
+
+    let voucherUrl = null
+    if (file) {
+      const { url, error } = await uploadVoucher(file, member.id)
+      if (error) { alert('Error al subir el comprobante'); setUploading(false); return }
+      voucherUrl = url
     }
-    setLoading(true)
 
-    // Subir imagen
-    const { url, error: uploadErr } = await uploadVoucher(file, member.id)
-    if (uploadErr) {
-      alert('Error al subir el comprobante. Intenta de nuevo.')
-      setLoading(false)
-      return
+    // Crear un pago por cada cuota seleccionada
+    const months = [...selectedMonths].sort()
+    for (const key of months) {
+      const month = availableMonths.find(m => m.key === key)
+      await createPayment({
+        member_id:      member.id,
+        amount:         planPrice,
+        payment_method: method,
+        payment_date:   today(),
+        due_date:       month.due,
+        status:         method === 'cash' ? 'pending' : 'pending',
+        voucher_url:    voucherUrl,
+        notes:          `Cuota ${month.label}`,
+      })
     }
 
-    // Calcular próxima fecha de vencimiento
-    let baseDate = lastPayment && getPaymentStatus(lastPayment.due_date) !== 'overdue' 
-      ? lastPayment.due_date 
-      : today()
-    let newDueDate = addDays(baseDate, months * duration)
-
-    // Crear pago
-    await createPayment({
-      member_id: member.id,
-      amount: total,
-      payment_date: today(),
-      due_date: newDueDate,
-      payment_method: 'deposit',
-      status: 'pending',
-      voucher_url: url,
-      notes: `Adelanto de ${months} cuota(s)`
-    })
-
-    setLoading(false)
+    // Notificar al admin (via la tabla notifications del admin)
+    // El admin verá esto en su panel
+    setUploading(false)
     setSuccess(true)
-    setTimeout(() => {
-      setSuccess(false)
-      setFile(null)
-      setPreview(null)
-      setMonths(1)
-      onRefresh()
-      onClose()
-    }, 1500)
+  }
+
+  const handleClose = () => {
+    setMethod('transfer')
+    setFile(null)
+    setPreview(null)
+    setSelectedMonths([])
+    setSuccess(false)
+    onClose()
+    onRefresh()
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="Registrar Nuevo Pago">
+    <Modal open={open} onClose={handleClose} title="Registrar pago">
       {success ? (
         <div className="text-center py-6">
-          <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-2" />
-          <p className="font-semibold text-white">Pago registrado correctamente</p>
-          <p className="text-sm text-gray-400 mt-1">El administrador lo revisará pronto.</p>
+          <CheckCircle className="w-14 h-14 text-emerald-400 mx-auto mb-3" />
+          <p className="font-semibold text-white text-lg">¡Pago registrado!</p>
+          <p className="text-gray-400 text-sm mt-1 mb-5">
+            El administrador revisará tu comprobante y aprobará el pago.
+          </p>
+          <button className="btn-primary w-full" onClick={() => {
+            // Enviar WhatsApp al admin automáticamente
+            const msg = `🏋️ *${import.meta.env.VITE_GYM_NAME || 'GymApp'}*
+📋 *Nuevo pago registrado*
+
+👤 *${member?.profile?.full_name}*
+💰 *${formatCurrency(totalAmount)}*
+📅 Cuotas: ${selectedMonths.map(k => availableMonths.find(m => m.key === k)?.label).join(', ')}
+
+Por favor revisar y aprobar ✅`
+            const num = (import.meta.env.VITE_GYM_WHATSAPP || '').replace(/[^0-9]/g,'')
+            window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank')
+            handleClose()
+          }}>
+            <MessageCircle className="w-4 h-4" /> Notificar al administrador por WhatsApp
+          </button>
+          <button className="btn-ghost w-full mt-2" onClick={handleClose}>
+            Cerrar sin notificar
+          </button>
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl p-4 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-brand-400 font-medium">Plan: {member.plan.name}</p>
-              <p className="text-xs text-gray-400">Duración base: {duration} días</p>
-            </div>
-            <div className="text-right">
-              <p className="text-xs text-gray-400">Costo mensual</p>
-              <p className="text-lg font-bold text-white">{formatCurrency(price)}</p>
-            </div>
+          {/* Plan info */}
+          <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3">
+            <p className="text-xs text-gray-400">Tu plan</p>
+            <p className="font-semibold text-white">{planName} — {formatCurrency(planPrice)}/mes</p>
           </div>
 
+          {/* Seleccionar cuotas */}
           <div>
-            <label className="label">¿Cuántas cuotas deseas pagar?</label>
-            <select className="input" value={months} onChange={(e) => setMonths(Number(e.target.value))}>
-              {[1, 2, 3, 4, 5, 6, 12].map(num => (
-                <option key={num} value={num}>{num} cuota(s) — Cubre {num * duration} días</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="flex justify-between items-center bg-gray-800/50 p-3 rounded-xl border border-gray-700">
-            <span className="text-sm text-gray-300">Total a pagar:</span>
-            <span className="text-2xl font-bold text-white">{formatCurrency(total)}</span>
-          </div>
-
-          <div>
-            <label className="label">Subir comprobante (Obligatorio)</label>
-            <div className="mt-2 flex justify-center rounded-xl border border-dashed border-gray-700 px-6 py-8 hover:border-brand-500/50 transition-colors bg-gray-900">
-              <div className="text-center">
-                {preview ? (
-                  <div className="space-y-3">
-                    <img src={preview} alt="Vista previa" className="mx-auto h-32 w-auto rounded-lg object-cover" />
-                    <label className="btn-secondary text-sm cursor-pointer inline-flex">
-                      Cambiar foto
-                      <input type="file" className="hidden" accept="image/*" onChange={handleFileChange} />
-                    </label>
-                  </div>
-                ) : (
-                  <>
-                    <Camera className="mx-auto h-8 w-8 text-gray-500" aria-hidden="true" />
-                    <div className="mt-4 flex text-sm leading-6 text-gray-400 justify-center">
-                      <label className="relative cursor-pointer rounded-md font-semibold text-brand-500 hover:text-brand-400">
-                        <span>Sube un archivo</span>
-                        <input type="file" className="sr-only" accept="image/*" onChange={handleFileChange} />
-                      </label>
+            <label className="label">¿Qué cuotas deseas pagar?</label>
+            {availableMonths.length === 0 ? (
+              <p className="text-sm text-gray-500">No hay cuotas pendientes disponibles.</p>
+            ) : (
+              <div className="space-y-2">
+                {availableMonths.map(m => (
+                  <button
+                    key={m.key}
+                    onClick={() => toggleMonth(m.key)}
+                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left
+                      ${selectedMonths.includes(m.key)
+                        ? 'bg-brand-500/10 border-brand-500/40 text-white'
+                        : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600'}`}
+                  >
+                    <span className="text-sm font-medium capitalize">{m.label}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-brand-400">{formatCurrency(planPrice)}</span>
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
+                        ${selectedMonths.includes(m.key) ? 'border-brand-500 bg-brand-500' : 'border-gray-600'}`}>
+                        {selectedMonths.includes(m.key) && <Check className="w-3 h-3 text-white" />}
+                      </div>
                     </div>
-                    <p className="text-xs leading-5 text-gray-500 mt-1">PNG, JPG, GIF</p>
-                  </>
-                )}
+                  </button>
+                ))}
               </div>
+            )}
+          </div>
+
+          {/* Total */}
+          {selectedMonths.length > 0 && (
+            <div className="flex items-center justify-between bg-gray-800/50 rounded-xl px-4 py-3">
+              <span className="text-sm text-gray-400">Total a pagar</span>
+              <span className="text-xl font-bold text-brand-400">{formatCurrency(totalAmount)}</span>
+            </div>
+          )}
+
+          {/* Método de pago */}
+          <div>
+            <label className="label">Método de pago</label>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { id: 'transfer', label: 'Transferencia', icon: '🏦' },
+                { id: 'deposit',  label: 'Depósito',      icon: '🏧' },
+              ].map(m => (
+                <button
+                  key={m.id}
+                  onClick={() => setMethod(m.id)}
+                  className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all
+                    ${method === m.id ? 'bg-brand-500/10 border-brand-500/40 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'}`}
+                >
+                  <span>{m.icon}</span>{m.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <button className="btn-primary w-full mt-2" onClick={handleSubmit} disabled={loading || !file}>
-            {loading ? 'Procesando...' : 'Registrar Pago'}
+          {/* Subir comprobante */}
+          <div>
+            <label className="label">Comprobante de pago *</label>
+            {preview ? (
+              <div className="relative rounded-xl overflow-hidden bg-gray-800">
+                <img src={preview} alt="preview" className="w-full max-h-48 object-cover" />
+                <button
+                  onClick={() => { setFile(null); setPreview(null) }}
+                  className="absolute top-2 right-2 bg-black/60 text-white rounded-lg p-1"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <label className="flex flex-col items-center justify-center gap-2 bg-gray-800/50 border-2 border-dashed border-gray-700 hover:border-brand-500/50 rounded-xl py-8 cursor-pointer transition-colors">
+                <Camera className="w-8 h-8 text-gray-500" />
+                <span className="text-sm text-gray-400">Toca para subir la foto del comprobante</span>
+                <span className="text-xs text-gray-600">JPG, PNG — máx 10MB</span>
+                <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
+              </label>
+            )}
+          </div>
+
+          <button
+            className="btn-primary w-full"
+            onClick={handleSubmit}
+            disabled={uploading || !selectedMonths.length || (!file && method !== 'cash')}
+          >
+            {uploading ? (
+              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Enviando pago...</>
+            ) : (
+              <><CreditCard className="w-4 h-4" /> Registrar pago</>
+            )}
           </button>
         </div>
       )}
@@ -1587,12 +1701,9 @@ function UserBody({ measurements, photos, member, onRefresh }) {
           </label>
           <div className="grid grid-cols-2 gap-3">
             {photos.map(p => (
-              <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square bg-gray-800 group">
+              <div key={p.id} className="relative rounded-xl overflow-hidden aspect-square bg-gray-800">
                 <img src={p.photo_url} alt="progreso" className="w-full h-full object-cover" />
-                <a href={p.photo_url} target="_blank" rel="noreferrer" download className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white backdrop-blur-sm">
-                  <Download className="w-6 h-6" />
-                </a>
-                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 px-2 py-2 pointer-events-none">
+                <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/80 px-2 py-2">
                   <p className="text-xs text-white">{formatDate(p.photo_date)}</p>
                 </div>
               </div>
