@@ -616,43 +616,87 @@ function CreateMemberModal({ open, onClose, plans }) {
       setError('Nombre, email y contraseña son obligatorios')
       return
     }
+    if (form.password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres')
+      return
+    }
     setLoading(true)
     setError('')
 
-    // Primero registrar con auth.signUp
+    // 1) Crear usuario en Supabase Auth (sin confirmación de email)
     const { data: authData, error: authErr } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: {
+        emailRedirectTo: null,
         data: { full_name: form.full_name, role: 'user' }
       }
     })
 
-    if (authErr) { setError(authErr.message); setLoading(false); return }
+    if (authErr) {
+      setError(authErr.message === 'User already registered'
+        ? 'Este email ya está registrado. Usa otro email.'
+        : authErr.message)
+      setLoading(false)
+      return
+    }
 
-    // Esperar un momento para que el trigger cree el perfil
-    await new Promise(r => setTimeout(r, 1500))
+    // 2) Obtener el ID — puede venir en authData.user o hay que buscarlo
+    let userId = authData?.user?.id ?? null
 
-    // Crear el miembro
-    const { error: memErr } = await supabase.from('members').insert({
-      profile_id: authData.user.id,
-      plan_id: form.plan_id || null,
-      start_date: form.start_date,
-      emergency_contact: form.emergency_contact,
-      notes: form.notes,
+    if (!userId) {
+      // Con email confirmation activo, authData.user puede ser null.
+      // Buscamos el perfil que el trigger debió crear.
+      await new Promise(r => setTimeout(r, 2000))
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', form.email)
+        .single()
+      userId = profileData?.id ?? null
+    }
+
+    if (!userId) {
+      setError('No se pudo obtener el ID del usuario. Ve a Supabase → Authentication → Providers → Email y desactiva "Confirm email", luego intenta de nuevo.')
+      setLoading(false)
+      return
+    }
+
+    // 3) Asegurarse que el perfil tiene los datos correctos
+    await supabase.from('profiles').upsert({
+      id: userId,
+      email: form.email,
+      full_name: form.full_name,
+      phone: form.phone || null,
+      birth_date: form.birth_date || null,
+      role: 'user'
     })
 
-    if (memErr) { setError(memErr.message); setLoading(false); return }
+    // 4) Crear el miembro
+    const { error: memErr } = await supabase.from('members').insert({
+      profile_id: userId,
+      plan_id: form.plan_id || null,
+      start_date: form.start_date,
+      emergency_contact: form.emergency_contact || null,
+      notes: form.notes || null,
+    })
 
-    // Actualizar perfil con datos extra
-    await supabase.from('profiles').update({
-      phone: form.phone,
-      birth_date: form.birth_date || null
-    }).eq('id', authData.user.id)
+    if (memErr) {
+      setError(memErr.message.includes('duplicate')
+        ? 'Este usuario ya tiene un perfil de miembro.'
+        : memErr.message)
+      setLoading(false)
+      return
+    }
 
     setSuccess(true)
     setLoading(false)
-    setTimeout(() => { setSuccess(false); setStep(1); setForm({ full_name: '', email: '', phone: '', password: '', plan_id: '', start_date: today(), birth_date: '', emergency_contact: '', notes: '' }); onClose() }, 2000)
+    setTimeout(() => {
+      setSuccess(false)
+      setStep(1)
+      setForm({ full_name: '', email: '', phone: '', password: '', plan_id: '', start_date: today(), birth_date: '', emergency_contact: '', notes: '' })
+      onClose()
+    }, 2000)
   }
 
   return (
@@ -868,7 +912,7 @@ function CreatePaymentModal({ open, onClose }) {
           <label className="label">Miembro *</label>
           <select className="input" value={form.member_id} onChange={e => handleMemberChange(e.target.value)}>
             <option value="">Seleccionar miembro</option>
-            {members.map(m => <option key={m.id} value={m.id}>{m.profile?.full_name}{m.plan ? \` — \${m.plan.name}\` : ''}</option>)}
+            {members.map(m => <option key={m.id} value={m.id}>{m.profile?.full_name}{m.plan ? `  — ${m.plan.name}` : ''}</option>)}
           </select>
         </div>
         <div className="grid grid-cols-2 gap-3">
