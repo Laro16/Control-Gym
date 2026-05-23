@@ -7,7 +7,7 @@ import {
   AlertCircle, CheckCircle, Clock, Banknote, AlertTriangle, Layers
 } from 'lucide-react'
 import {
-  supabase,
+  supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
   createPayment, updatePayment, createMeasurement, updateMeasurement,
   updateMember, deleteMember, getPlans, createPlan, updatePlan,
@@ -623,46 +623,32 @@ function CreateMemberModal({ open, onClose, plans }) {
     setLoading(true)
     setError('')
 
-    // 1) Crear usuario en Supabase Auth (sin confirmación de email)
-    const { data: authData, error: authErr } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: {
-        emailRedirectTo: null,
-        data: { full_name: form.full_name, role: 'user' }
-      }
-    })
+    // 1) Crear usuario con el cliente admin (NO afecta la sesión del admin actual)
+    const { data: authData, error: authErr } = await adminCreateUser(
+      form.email,
+      form.password,
+      form.full_name
+    )
 
     if (authErr) {
-      setError(authErr.message === 'User already registered'
-        ? 'Este email ya está registrado. Usa otro email.'
-        : authErr.message)
+      setError(
+        authErr.message?.includes('already been registered') || authErr.message?.includes('already registered')
+          ? 'Este email ya está registrado. Usa otro email.'
+          : authErr.message || 'Error al crear el usuario'
+      )
       setLoading(false)
       return
     }
 
-    // 2) Obtener el ID — puede venir en authData.user o hay que buscarlo
-    let userId = authData?.user?.id ?? null
-
+    const userId = authData?.user?.id
     if (!userId) {
-      // Con email confirmation activo, authData.user puede ser null.
-      // Buscamos el perfil que el trigger debió crear.
-      await new Promise(r => setTimeout(r, 2000))
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('email', form.email)
-        .single()
-      userId = profileData?.id ?? null
-    }
-
-    if (!userId) {
-      setError('No se pudo obtener el ID del usuario. Ve a Supabase → Authentication → Providers → Email y desactiva "Confirm email", luego intenta de nuevo.')
+      setError('No se pudo crear el usuario. Verifica que VITE_SUPABASE_SERVICE_KEY esté configurada en Vercel.')
       setLoading(false)
       return
     }
 
-    // 3) Asegurarse que el perfil tiene los datos correctos
+    // 2) El trigger crea el perfil automáticamente, pero lo actualizamos con datos extra
+    await new Promise(r => setTimeout(r, 800))
     await supabase.from('profiles').upsert({
       id: userId,
       email: form.email,
@@ -672,7 +658,7 @@ function CreateMemberModal({ open, onClose, plans }) {
       role: 'user'
     })
 
-    // 4) Crear el miembro
+    // 3) Crear el registro de miembro
     const { error: memErr } = await supabase.from('members').insert({
       profile_id: userId,
       plan_id: form.plan_id || null,
