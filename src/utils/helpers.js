@@ -51,18 +51,56 @@ export const approvalStatusLabel = {
 }
 
 // ── MEDIDAS ────────────────────────────────────────────────
+// Campos de medidas — peso en libras, medidas en cm, grasa en %
+// height_cm se guarda solo en la ficha del cliente (no se edita mes a mes)
 export const measurementFields = [
-  { key: 'weight_kg',     label: 'Peso',            unit: 'kg' },
-  { key: 'waist_cm',      label: 'Cintura',         unit: 'cm' },
-  { key: 'chest_cm',      label: 'Pecho',           unit: 'cm' },
-  { key: 'hips_cm',       label: 'Caderas',         unit: 'cm' },
-  { key: 'left_arm_cm',   label: 'Brazo izq.',      unit: 'cm' },
-  { key: 'right_arm_cm',  label: 'Brazo der.',      unit: 'cm' },
-  { key: 'left_leg_cm',   label: 'Pierna izq.',     unit: 'cm' },
-  { key: 'right_leg_cm',  label: 'Pierna der.',     unit: 'cm' },
-  { key: 'body_fat_pct',  label: 'Grasa corporal',  unit: '%' },
-  { key: 'height_cm',     label: 'Altura',          unit: 'cm' },
+  { key: 'weight_kg',    label: 'Peso',           unit: 'lbs', convert: v => (v * 2.20462).toFixed(1), store: v => (v / 2.20462).toFixed(2) },
+  { key: 'waist_cm',     label: 'Cintura',        unit: 'cm',  convert: null, store: null },
+  { key: 'chest_cm',     label: 'Pecho',          unit: 'cm',  convert: null, store: null },
+  { key: 'hips_cm',      label: 'Caderas',        unit: 'cm',  convert: null, store: null },
+  { key: 'left_arm_cm',  label: 'Brazo izq.',     unit: 'cm',  convert: null, store: null },
+  { key: 'right_arm_cm', label: 'Brazo der.',     unit: 'cm',  convert: null, store: null },
+  { key: 'left_leg_cm',  label: 'Pierna izq.',    unit: 'cm',  convert: null, store: null },
+  { key: 'right_leg_cm', label: 'Pierna der.',    unit: 'cm',  convert: null, store: null },
+  { key: 'body_fat_pct', label: 'Grasa corporal', unit: '%',   convert: null, store: null },
 ]
+
+// Mostrar el valor correcto (convirtiendo si aplica)
+export const displayValue = (field, rawValue) => {
+  if (!rawValue) return null
+  if (field.convert) return field.convert(rawValue)
+  return Number(rawValue).toFixed(1)
+}
+
+// Comentario automático de progreso
+export const getMeasurementComment = (field, diff) => {
+  if (diff === null || diff === 0) return null
+  const label = field.label.toLowerCase()
+  const unit  = field.unit
+  const abs   = Math.abs(field.convert ? (diff * 2.20462) : diff).toFixed(1)
+
+  // Peso: bajar es bueno (generalmente)
+  if (field.key === 'weight_kg') {
+    if (diff < 0) return `¡Bajaste ${abs} ${unit} de peso! 💪 ¡Sigue así!`
+    if (diff > 0) return `Subiste ${abs} ${unit} de peso. Revisa tu alimentación.`
+  }
+  // Grasa: bajar es bueno
+  if (field.key === 'body_fat_pct') {
+    if (diff < 0) return `¡Bajaste ${abs}% de grasa corporal! 🔥 ¡Excelente!`
+    if (diff > 0) return `Subiste ${abs}% de grasa. Enfócate en cardio y dieta.`
+  }
+  // Brazos, piernas, pecho: subir es músculo (bueno)
+  if (['left_arm_cm','right_arm_cm','left_leg_cm','right_leg_cm','chest_cm'].includes(field.key)) {
+    if (diff > 0) return `+${abs} ${unit} en ${label}. ¡Ganando músculo! 💪`
+    if (diff < 0) return `${abs} ${unit} menos en ${label}.`
+  }
+  // Cintura, caderas: bajar es bueno
+  if (['waist_cm','hips_cm'].includes(field.key)) {
+    if (diff < 0) return `¡Bajaste ${abs} ${unit} de ${label}! ¡Muy bien! 🎉`
+    if (diff > 0) return `Subiste ${abs} ${unit} en ${label}.`
+  }
+  return null
+}
 
 export const getMeasurementDiff = (current, previous, key) => {
   if (!current?.[key] || !previous?.[key]) return null
