@@ -39,9 +39,10 @@ export const getPaymentStatus = (dueDate) => {
 }
 
 export const paymentStatusLabel = {
-  overdue:  { text: 'Vencida',          cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10' },
-  due_soon: { text: 'Próxima a vencer', cls: 'badge-yellow', dot: 'bg-yellow-400',  bg: 'bg-yellow-500/10' },
-  current:  { text: 'Al día',           cls: 'badge-green',  dot: 'bg-emerald-400', bg: 'bg-emerald-500/10' },
+  overdue:   { text: 'Vencida',          cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10' },
+  due_soon:  { text: 'Próxima a vencer', cls: 'badge-yellow', dot: 'bg-yellow-400',  bg: 'bg-yellow-500/10' },
+  current:   { text: 'Al día',           cls: 'badge-green',  dot: 'bg-emerald-400', bg: 'bg-emerald-500/10' },
+  no_payment:{ text: 'Sin pago',         cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10' },
 }
 
 export const approvalStatusLabel = {
@@ -77,7 +78,8 @@ export const getMeasurementComment = (field, diff) => {
   if (diff === null || diff === 0) return null
   const label = field.label.toLowerCase()
   const unit  = field.unit
-  const abs   = Math.abs(field.convert ? (diff * 2.20462) : diff).toFixed(1)
+  // Para peso mostrar en lbs, resto en su unidad original
+  const abs   = Math.abs(field.key === 'weight_kg' ? (diff * 2.20462) : diff).toFixed(1)
 
   // Peso: bajar es bueno (generalmente)
   if (field.key === 'weight_kg') {
