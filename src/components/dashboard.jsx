@@ -1395,32 +1395,33 @@ function UserPayments({ payments, member, onRefresh }) {
 
 // ── MODAL NUEVO PAGO (usuario) ─────────────────────────────
 function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh }) {
-  const [method, setMethod]     = useState('transfer')
-  const [file, setFile]         = useState(null)
-  const [preview, setPreview]   = useState(null)
+  const [method, setMethod]       = useState('transfer')
+  const [file, setFile]           = useState(null)
+  const [preview, setPreview]     = useState(null)
   const [uploading, setUploading] = useState(false)
-  const [success, setSuccess]   = useState(false)
+  const [success, setSuccess]     = useState(false)
   const [selectedMonths, setSelectedMonths] = useState([])
+  const [yearOffset, setYearOffset] = useState(0) // 0 = año actual, 1 = próximo año
 
-  const planPrice    = member?.plan?.price || 0
-  const planDays     = member?.plan?.duration_days || 30
-  const planName     = member?.plan?.name || 'Sin plan'
+  const planPrice = member?.plan?.price || 0
+  const planName  = member?.plan?.name  || 'Sin plan'
 
-  // Generar cuotas disponibles: mes actual + 3 meses adelante
-  const availableMonths = []
-  const paidDates = new Set(existingPayments.map(p => p.due_date?.slice(0, 7)))
-  for (let i = 0; i < 4; i++) {
-    const d = new Date()
-    d.setMonth(d.getMonth() + i)
-    const key   = d.toISOString().slice(0, 7)       // "2026-05"
+  // Generar los 12 meses del año seleccionado
+  const currentYear = new Date().getFullYear() + yearOffset
+  const allMonths = Array.from({ length: 12 }, (_, i) => {
+    const d    = new Date(currentYear, i, 1)
+    const key  = `${currentYear}-${String(i + 1).padStart(2, '0')}`
     const label = d.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })
-    const due   = new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10) // último día del mes
-    if (!paidDates.has(key)) {
-      availableMonths.push({ key, label, due })
-    }
-  }
+    const due  = new Date(currentYear, i + 1, 0).toISOString().slice(0, 10)
+    const isPaid = existingPayments.some(p =>
+      p.due_date?.slice(0, 7) === key && p.status !== 'rejected'
+    )
+    return { key, label, due, isPaid }
+  })
 
   const toggleMonth = (key) => {
+    const month = allMonths.find(m => m.key === key)
+    if (month?.isPaid) return // no deseleccionar meses ya pagados
     setSelectedMonths(prev =>
       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     )
@@ -1437,36 +1438,30 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
 
   const handleSubmit = async () => {
     if (!selectedMonths.length) { alert('Selecciona al menos una cuota'); return }
-    if (method !== 'cash' && !file) { alert('Debes subir el comprobante de pago'); return }
+    if (!file) { alert('Debes subir el comprobante de pago (foto del depósito o transferencia)'); return }
     if (!member) return
 
     setUploading(true)
 
-    let voucherUrl = null
-    if (file) {
-      const { url, error } = await uploadVoucher(file, member.id)
-      if (error) { alert('Error al subir el comprobante'); setUploading(false); return }
-      voucherUrl = url
-    }
+    const { url, error } = await uploadVoucher(file, member.id)
+    if (error) { alert('Error al subir el comprobante. Intenta de nuevo.'); setUploading(false); return }
 
     // Crear un pago por cada cuota seleccionada
     const months = [...selectedMonths].sort()
     for (const key of months) {
-      const month = availableMonths.find(m => m.key === key)
+      const month = allMonths.find(m => m.key === key)
       await createPayment({
         member_id:      member.id,
         amount:         planPrice,
         payment_method: method,
         payment_date:   today(),
         due_date:       month.due,
-        status:         method === 'cash' ? 'pending' : 'pending',
-        voucher_url:    voucherUrl,
+        status:         'pending',
+        voucher_url:    url,
         notes:          `Cuota ${month.label}`,
       })
     }
 
-    // Notificar al admin (via la tabla notifications del admin)
-    // El admin verá esto en su panel
     setUploading(false)
     setSuccess(true)
   }
@@ -1477,6 +1472,7 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
     setPreview(null)
     setSelectedMonths([])
     setSuccess(false)
+    setYearOffset(0)
     onClose()
     onRefresh()
   }
@@ -1512,51 +1508,76 @@ Por favor revisar y aprobar ✅`
         </div>
       ) : (
         <div className="space-y-4">
+
           {/* Plan info */}
           <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3">
             <p className="text-xs text-gray-400">Tu plan</p>
             <p className="font-semibold text-white">{planName} — {formatCurrency(planPrice)}/mes</p>
           </div>
 
-          {/* Seleccionar cuotas */}
-          <div>
-            <label className="label">¿Qué cuotas deseas pagar?</label>
-            {availableMonths.length === 0 ? (
-              <p className="text-sm text-gray-500">No hay cuotas pendientes disponibles.</p>
-            ) : (
-              <div className="space-y-2">
-                {availableMonths.map(m => (
-                  <button
-                    key={m.key}
-                    onClick={() => toggleMonth(m.key)}
-                    className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all text-left
-                      ${selectedMonths.includes(m.key)
-                        ? 'bg-brand-500/10 border-brand-500/40 text-white'
-                        : 'bg-gray-800/50 border-gray-700 text-gray-300 hover:border-gray-600'}`}
-                  >
-                    <span className="text-sm font-medium capitalize">{m.label}</span>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-brand-400">{formatCurrency(planPrice)}</span>
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
-                        ${selectedMonths.includes(m.key) ? 'border-brand-500 bg-brand-500' : 'border-gray-600'}`}>
-                        {selectedMonths.includes(m.key) && <Check className="w-3 h-3 text-white" />}
-                      </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            )}
+          {/* Selector de año */}
+          <div className="flex items-center justify-between">
+            <label className="label mb-0">¿Qué cuotas deseas pagar?</label>
+            <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-1 py-0.5">
+              <button
+                onClick={() => { setYearOffset(0); setSelectedMonths([]) }}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all
+                  ${yearOffset === 0 ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'}`}
+              >{new Date().getFullYear()}</button>
+              <button
+                onClick={() => { setYearOffset(1); setSelectedMonths([]) }}
+                className={`px-3 py-1 rounded-md text-xs font-medium transition-all
+                  ${yearOffset === 1 ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'}`}
+              >{new Date().getFullYear() + 1}</button>
+            </div>
+          </div>
+
+          {/* Grid de 12 meses */}
+          <div className="grid grid-cols-2 gap-2">
+            {allMonths.map(m => {
+              const isSelected = selectedMonths.includes(m.key)
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => toggleMonth(m.key)}
+                  disabled={m.isPaid}
+                  className={`flex items-center justify-between px-3 py-2.5 rounded-xl border text-left transition-all
+                    ${m.isPaid
+                      ? 'bg-emerald-500/5 border-emerald-500/20 cursor-not-allowed opacity-60'
+                      : isSelected
+                        ? 'bg-brand-500/10 border-brand-500/40'
+                        : 'bg-gray-800/50 border-gray-700 hover:border-gray-500'}`}
+                >
+                  <div>
+                    <p className={`text-xs font-semibold capitalize ${m.isPaid ? 'text-emerald-400' : isSelected ? 'text-white' : 'text-gray-300'}`}>
+                      {m.label.split(' ')[0]}
+                    </p>
+                    {m.isPaid
+                      ? <p className="text-[10px] text-emerald-500">Pagado</p>
+                      : <p className="text-[10px] text-brand-400">{formatCurrency(planPrice)}</p>
+                    }
+                  </div>
+                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
+                    ${m.isPaid ? 'border-emerald-500 bg-emerald-500' : isSelected ? 'border-brand-500 bg-brand-500' : 'border-gray-600'}`}>
+                    {(m.isPaid || isSelected) && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                </button>
+              )
+            })}
           </div>
 
           {/* Total */}
           {selectedMonths.length > 0 && (
             <div className="flex items-center justify-between bg-gray-800/50 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-400">Total a pagar</span>
-              <span className="text-xl font-bold text-brand-400">{formatCurrency(totalAmount)}</span>
+              <div>
+                <p className="text-xs text-gray-500">Total a pagar</p>
+                <p className="text-xs text-gray-400">{selectedMonths.length} cuota{selectedMonths.length > 1 ? 's' : ''}</p>
+              </div>
+              <span className="text-2xl font-bold text-brand-400">{formatCurrency(totalAmount)}</span>
             </div>
           )}
 
-          {/* Método de pago */}
+          {/* Método */}
           <div>
             <label className="label">Método de pago</label>
             <div className="grid grid-cols-2 gap-2">
@@ -1564,51 +1585,42 @@ Por favor revisar y aprobar ✅`
                 { id: 'transfer', label: 'Transferencia', icon: '🏦' },
                 { id: 'deposit',  label: 'Depósito',      icon: '🏧' },
               ].map(m => (
-                <button
-                  key={m.id}
-                  onClick={() => setMethod(m.id)}
+                <button key={m.id} onClick={() => setMethod(m.id)}
                   className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium transition-all
-                    ${method === m.id ? 'bg-brand-500/10 border-brand-500/40 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'}`}
-                >
+                    ${method === m.id ? 'bg-brand-500/10 border-brand-500/40 text-white' : 'bg-gray-800 border-gray-700 text-gray-400 hover:border-gray-600'}`}>
                   <span>{m.icon}</span>{m.label}
                 </button>
               ))}
             </div>
           </div>
 
-          {/* Subir comprobante */}
+          {/* Comprobante */}
           <div>
-            <label className="label">Comprobante de pago *</label>
+            <label className="label">Foto del comprobante *</label>
             {preview ? (
               <div className="relative rounded-xl overflow-hidden bg-gray-800">
                 <img src={preview} alt="preview" className="w-full max-h-48 object-cover" />
-                <button
-                  onClick={() => { setFile(null); setPreview(null) }}
-                  className="absolute top-2 right-2 bg-black/60 text-white rounded-lg p-1"
-                >
+                <button onClick={() => { setFile(null); setPreview(null) }}
+                  className="absolute top-2 right-2 bg-black/60 text-white rounded-lg p-1.5">
                   <X className="w-4 h-4" />
                 </button>
               </div>
             ) : (
-              <label className="flex flex-col items-center justify-center gap-2 bg-gray-800/50 border-2 border-dashed border-gray-700 hover:border-brand-500/50 rounded-xl py-8 cursor-pointer transition-colors">
+              <label className="flex flex-col items-center gap-2 bg-gray-800/50 border-2 border-dashed border-gray-700 hover:border-brand-500/50 rounded-xl py-8 cursor-pointer transition-colors">
                 <Camera className="w-8 h-8 text-gray-500" />
-                <span className="text-sm text-gray-400">Toca para subir la foto del comprobante</span>
-                <span className="text-xs text-gray-600">JPG, PNG — máx 10MB</span>
+                <span className="text-sm text-gray-400">Foto del depósito o transferencia</span>
+                <span className="text-xs text-gray-600">Toca para abrir la cámara o galería</span>
                 <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFileChange} />
               </label>
             )}
           </div>
 
-          <button
-            className="btn-primary w-full"
-            onClick={handleSubmit}
-            disabled={uploading || !selectedMonths.length || (!file && method !== 'cash')}
-          >
-            {uploading ? (
-              <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Enviando pago...</>
-            ) : (
-              <><CreditCard className="w-4 h-4" /> Registrar pago</>
-            )}
+          <button className="btn-primary w-full" onClick={handleSubmit}
+            disabled={uploading || !selectedMonths.length || !file}>
+            {uploading
+              ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Subiendo comprobante...</>
+              : <><CreditCard className="w-4 h-4" />Enviar pago al administrador</>
+            }
           </button>
         </div>
       )}
