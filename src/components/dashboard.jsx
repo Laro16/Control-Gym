@@ -18,7 +18,7 @@ import {
 import {
   formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
   approvalStatusLabel, measurementFields, getMeasurementDiff,
-  displayValue, getMeasurementComment,
+  displayValue, getMeasurementComment, daysBetween,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
   generateMasterExcel, today, addDays, calculateStreak
 } from '../utils/helpers'
@@ -198,7 +198,11 @@ function AdminOverview({ members, payments, profile, onNavigate }) {
   const pendingPayments = payments.filter(p => p.status === 'pending')
   const overdueMembers = members.filter(m => {
     const mp = payments.filter(p => p.member_id === m.id && p.status !== 'rejected')
-    if (!mp.length) return false
+    // Sin pagos y ya pasó el mes de inicio → vencida
+    if (!mp.length) {
+      // Más de 30 días desde inicio sin pagos → vencido
+      return m.start_date ? daysBetween(m.start_date, today()) > 30 : false
+    }
     return getPaymentStatus(mp[0].due_date) === 'overdue'
   })
   const totalMonth = payments
@@ -307,9 +311,10 @@ function AdminOverview({ members, payments, profile, onNavigate }) {
         </h3>
         <div className="space-y-2">
           {filteredMembers.map(m => {
-            const mp = payments.filter(p => p.member_id === m.id)
+            const mp = payments.filter(p => p.member_id === m.id && p.status !== 'rejected')
             const last = mp[0]
-            const st = last ? getPaymentStatus(last.due_date) : 'current'
+            // Sin pagos → "Sin pago" en rojo (no "Al día")
+            const st = !last ? 'no_payment' : getPaymentStatus(last.due_date)
             const stLabel = paymentStatusLabel[st]
             return (
               <div key={m.id} className="card flex items-center justify-between py-3 gap-3">
@@ -319,7 +324,9 @@ function AdminOverview({ members, payments, profile, onNavigate }) {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white truncate">{m.profile?.full_name}</p>
-                    <p className="text-xs text-gray-500">{last ? `Vence ${formatDate(last.due_date)}` : 'Sin pagos'}</p>
+                    <p className="text-xs text-gray-500">
+                      {last ? `Vence ${formatDate(last.due_date)}` : `Sin pagos · Desde ${formatDate(m.start_date)}`}
+                    </p>
                   </div>
                 </div>
                 <span className={stLabel.cls}>{stLabel.text}</span>
@@ -1768,32 +1775,60 @@ function UserBody({ measurements, photos, member, onRefresh }) {
         <div className="space-y-3">
           {latest ? (
             <>
-              <div className="card">
-                <p className="text-xs text-gray-500 mb-3">Última medición: {formatDate(latest.measured_at)}</p>
+              <div className="card space-y-3">
+                <p className="text-xs text-gray-500">Última medición: {formatDate(latest.measured_at)}</p>
                 <div className="grid grid-cols-2 gap-2">
                   {measurementFields.filter(f => latest[f.key]).map(f => {
-                    const diff = prev ? getMeasurementDiff(latest, prev, f.key) : null
+                    const rawDiff = prev ? getMeasurementDiff(latest, prev, f.key) : null
+                    const dispVal = displayValue(f, latest[f.key])
+                    const diffDisplay = rawDiff !== null
+                      ? (f.convert ? (rawDiff * 2.20462).toFixed(1) : rawDiff.toFixed(1))
+                      : null
+                    const isGoodUp  = ['left_arm_cm','right_arm_cm','left_leg_cm','right_leg_cm','chest_cm'].includes(f.key)
+                    const isGoodDown = ['weight_kg','body_fat_pct','waist_cm','hips_cm'].includes(f.key)
+                    const diffColor = rawDiff === null || rawDiff === 0 ? 'text-gray-500'
+                      : isGoodDown ? (rawDiff < 0 ? 'text-emerald-400' : 'text-red-400')
+                      : isGoodUp   ? (rawDiff > 0 ? 'text-emerald-400' : 'text-red-400')
+                      : 'text-gray-400'
                     return (
                       <div key={f.key} className="bg-gray-800/50 rounded-xl p-3">
                         <p className="text-xs text-gray-500">{f.label}</p>
-                        <p className="text-lg font-bold text-white">{latest[f.key]} <span className="text-xs text-gray-400">{f.unit}</span></p>
-                        {diff !== null && (
-                          <p className={`text-xs flex items-center gap-1 mt-0.5 ${diff > 0 ? 'text-red-400' : diff < 0 ? 'text-emerald-400' : 'text-gray-500'}`}>
-                            {diff > 0 ? <TrendingUp className="w-3 h-3" /> : diff < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
-                            {diff > 0 ? '+' : ''}{diff.toFixed(1)} {f.unit}
+                        <p className="text-lg font-bold text-white">
+                          {dispVal} <span className="text-xs text-gray-400">{f.unit}</span>
+                        </p>
+                        {diffDisplay !== null && rawDiff !== 0 && (
+                          <p className={`text-xs flex items-center gap-0.5 mt-0.5 ${diffColor}`}>
+                            {rawDiff > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                            {Number(diffDisplay) > 0 ? '+' : ''}{diffDisplay} {f.unit}
                           </p>
                         )}
                       </div>
                     )
                   })}
                 </div>
+                {/* Comentarios de progreso para el usuario */}
+                {prev && (() => {
+                  const comments = []
+                  measurementFields.forEach(f => {
+                    const diff = getMeasurementDiff(latest, prev, f.key)
+                    if (diff !== null && diff !== 0) {
+                      const c = getMeasurementComment(f, diff)
+                      if (c) comments.push(c)
+                    }
+                  })
+                  return comments.length > 0 ? (
+                    <div className="bg-brand-500/5 border border-brand-500/20 rounded-xl px-3 py-2.5 space-y-1">
+                      {comments.map((c, i) => <p key={i} className="text-xs text-brand-300">{c}</p>)}
+                    </div>
+                  ) : null
+                })()}
               </div>
               {measurements.slice(1).map(m => (
                 <div key={m.id} className="card opacity-60">
                   <p className="text-xs text-gray-500 mb-1">{formatDate(m.measured_at)}</p>
                   <div className="flex flex-wrap gap-2 text-xs text-gray-400">
                     {measurementFields.filter(f => m[f.key]).map(f => (
-                      <span key={f.key}>{f.label}: {m[f.key]} {f.unit}</span>
+                      <span key={f.key}>{f.label}: {displayValue(f, m[f.key])} {f.unit}</span>
                     ))}
                   </div>
                 </div>
@@ -1802,7 +1837,8 @@ function UserBody({ measurements, photos, member, onRefresh }) {
           ) : (
             <div className="text-center py-12 text-gray-500">
               <TrendingUp className="w-10 h-10 mx-auto mb-2 opacity-30" />
-              Sin medidas registradas aún
+              <p>Sin medidas registradas</p>
+              <p className="text-xs mt-1">El administrador las registrará en tu próxima visita</p>
             </div>
           )}
         </div>
