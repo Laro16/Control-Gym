@@ -18,6 +18,7 @@ import {
 import {
   formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
   approvalStatusLabel, measurementFields, getMeasurementDiff,
+  displayValue, getMeasurementComment,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
   generateMasterExcel, today, addDays, calculateStreak
 } from '../utils/helpers'
@@ -177,7 +178,7 @@ export function AdminDashboard({ profile, onLogout }) {
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
         {loading ? <Spinner /> : (
           <>
-            {tab === 'overview' && <AdminOverview members={members} payments={payments} onRefresh={loadData} profile={profile} />}
+            {tab === 'overview' && <AdminOverview members={members} payments={payments} onRefresh={loadData} profile={profile} onNavigate={(a) => { if(a==='refresh') loadData(); else setTab(a) }} />}
             {tab === 'members' && <AdminMembers members={members} plans={plans} onRefresh={loadData} />}
             {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} profile={profile} />}
             {tab === 'plans'   && <AdminPlans plans={plans} onRefresh={loadData} />}
@@ -190,26 +191,31 @@ export function AdminDashboard({ profile, onLogout }) {
 }
 
 // ── OVERVIEW ───────────────────────────────────────────────
-function AdminOverview({ members, payments, profile }) {
+function AdminOverview({ members, payments, profile, onNavigate }) {
+  const [filter, setFilter] = useState(null) // null | 'active' | 'pending' | 'overdue'
+
   const active = members.filter(m => m.status === 'active').length
   const pendingPayments = payments.filter(p => p.status === 'pending')
   const overdueMembers = members.filter(m => {
     const mp = payments.filter(p => p.member_id === m.id && p.status !== 'rejected')
     if (!mp.length) return false
-    const last = mp[0]
-    return getPaymentStatus(last.due_date) === 'overdue'
+    return getPaymentStatus(mp[0].due_date) === 'overdue'
   })
-
   const totalMonth = payments
     .filter(p => p.status === 'approved' && p.payment_date?.startsWith(new Date().toISOString().slice(0, 7)))
     .reduce((a, p) => a + Number(p.amount), 0)
 
   const stats = [
-    { label: 'Miembros activos', value: active, icon: Users, color: 'text-brand-400', bg: 'bg-brand-500/10' },
-    { label: 'Pendientes de aprobación', value: pendingPayments.length, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-500/10' },
-    { label: 'Con cuota vencida', value: overdueMembers.length, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10' },
-    { label: 'Ingresos este mes', value: formatCurrency(totalMonth), icon: CreditCard, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { id: 'active',  label: 'Miembros activos',        value: active,                  icon: Users,         color: 'text-brand-400',   bg: 'bg-brand-500/10',   clickable: true },
+    { id: 'pending', label: 'Pendientes de aprobación', value: pendingPayments.length,  icon: Clock,         color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  clickable: true },
+    { id: 'overdue', label: 'Con cuota vencida',        value: overdueMembers.length,   icon: AlertTriangle, color: 'text-red-400',     bg: 'bg-red-500/10',     clickable: true },
+    { id: 'income',  label: 'Ingresos este mes',        value: formatCurrency(totalMonth), icon: CreditCard,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', clickable: false },
   ]
+
+  // Miembros filtrados según stat activo
+  const filteredMembers = filter === 'active'  ? members.filter(m => m.status === 'active')
+    : filter === 'overdue' ? overdueMembers
+    : members
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -218,27 +224,89 @@ function AdminOverview({ members, payments, profile }) {
         <p className="text-gray-500 text-sm mt-1">{formatDate(today())}</p>
       </div>
 
-      {/* Stats */}
+      {/* Stats interactivos */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map(s => (
-          <div key={s.label} className="card-hover">
+          <button
+            key={s.id}
+            onClick={() => s.clickable && setFilter(filter === s.id ? null : s.id)}
+            className={`card text-left transition-all duration-200 ${s.clickable ? 'hover:border-gray-600 active:scale-95 cursor-pointer' : 'cursor-default'}
+              ${filter === s.id ? 'border-brand-500/50 ring-1 ring-brand-500/30' : ''}`}
+          >
             <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
               <s.icon className={`w-5 h-5 ${s.color}`} />
             </div>
             <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
             <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
-          </div>
+            {s.clickable && <div className="text-[10px] text-gray-600 mt-1">Toca para filtrar</div>}
+          </button>
         ))}
       </div>
 
-      {/* Alertas de cuotas */}
+      {/* Pagos pendientes — clicables para aprobar */}
+      {filter === 'pending' || pendingPayments.length > 0 ? (
+        <div>
+          <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-yellow-400" />
+            Comprobantes pendientes ({pendingPayments.length})
+          </h3>
+          {pendingPayments.length === 0 ? (
+            <p className="text-gray-500 text-sm">Sin comprobantes pendientes</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingPayments.map(p => (
+                <div key={p.id} className="card space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-white">{p.member?.profile?.full_name}</p>
+                      <p className="text-xs text-gray-400">
+                        {formatCurrency(p.amount)} · {p.notes || ''} · Vence {formatDate(p.due_date)}
+                      </p>
+                    </div>
+                    <span className="badge-yellow flex-shrink-0">Pendiente</span>
+                  </div>
+                  {p.voucher_url && (
+                    <div className="relative rounded-xl overflow-hidden bg-gray-800 group">
+                      <img src={p.voucher_url} alt="comprobante" className="w-full max-h-40 object-cover" />
+                      <a href={p.voucher_url} target="_blank" rel="noreferrer" download
+                        className="absolute top-2 right-2 bg-black/60 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Download className="w-3 h-3" /> Ver
+                      </a>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold py-2 rounded-xl transition-all text-sm"
+                      onClick={async () => {
+                        await updatePayment(p.id, { status: 'approved', approved_at: new Date().toISOString() })
+                        await createNotification({ profile_id: p.member?.profile_id, type: 'payment_approved', title: 'Pago aprobado ✅', message: `Tu pago de ${formatCurrency(p.amount)} fue aprobado.` })
+                        onNavigate('refresh')
+                      }}>
+                      <Check className="w-4 h-4" /> Aprobar
+                    </button>
+                    <button className="flex-1 flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold py-2 rounded-xl transition-all text-sm"
+                      onClick={async () => {
+                        await updatePayment(p.id, { status: 'rejected' })
+                        onNavigate('refresh')
+                      }}>
+                      <X className="w-4 h-4" /> Rechazar
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
+      {/* Lista de miembros filtrada */}
       <div>
         <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-brand-500" />
-          Estado de cuotas
+          {filter === 'active' ? 'Miembros activos' : filter === 'overdue' ? 'Con cuota vencida' : 'Estado de cuotas'}
+          {filter && <button onClick={() => setFilter(null)} className="ml-auto text-xs text-gray-500 hover:text-white">Ver todos</button>}
         </h3>
         <div className="space-y-2">
-          {members.slice(0, 8).map(m => {
+          {filteredMembers.map(m => {
             const mp = payments.filter(p => p.member_id === m.id)
             const last = mp[0]
             const st = last ? getPaymentStatus(last.due_date) : 'current'
@@ -247,9 +315,7 @@ function AdminOverview({ members, payments, profile }) {
               <div key={m.id} className="card flex items-center justify-between py-3 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className={`w-8 h-8 rounded-full flex-shrink-0 ${stLabel.bg || 'bg-gray-800'} flex items-center justify-center`}>
-                    <span className="text-xs font-bold text-white">
-                      {m.profile?.full_name?.[0]?.toUpperCase()}
-                    </span>
+                    <span className="text-xs font-bold text-white">{m.profile?.full_name?.[0]?.toUpperCase()}</span>
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-white truncate">{m.profile?.full_name}</p>
@@ -260,29 +326,9 @@ function AdminOverview({ members, payments, profile }) {
               </div>
             )
           })}
+          {filteredMembers.length === 0 && <p className="text-gray-500 text-sm text-center py-4">Sin miembros en esta categoría</p>}
         </div>
       </div>
-
-      {/* Pagos pendientes */}
-      {pendingPayments.length > 0 && (
-        <div>
-          <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-yellow-400" />
-            Comprobantes pendientes ({pendingPayments.length})
-          </h3>
-          <div className="space-y-2">
-            {pendingPayments.map(p => (
-              <div key={p.id} className="card flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-sm font-medium text-white">{p.member?.profile?.full_name}</p>
-                  <p className="text-xs text-gray-500">{formatCurrency(p.amount)} — {formatDate(p.due_date)}</p>
-                </div>
-                <span className="badge-yellow">Pendiente</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -529,52 +575,100 @@ function EditMemberForm({ member, plans, onSave }) {
 }
 
 function MeasurementCard({ current, previous }) {
+  // Recopilar comentarios de progreso
+  const comments = []
+  if (previous) {
+    measurementFields.forEach(f => {
+      const diff = getMeasurementDiff(current, previous, f.key)
+      if (diff !== null && diff !== 0) {
+        const comment = getMeasurementComment(f, diff)
+        if (comment) comments.push(comment)
+      }
+    })
+  }
+
+  const weightLbs = current.weight_kg ? (current.weight_kg * 2.20462).toFixed(1) : null
+
   return (
-    <div className="card text-sm">
-      <div className="flex items-center justify-between mb-3">
+    <div className="card text-sm space-y-3">
+      <div className="flex items-center justify-between">
         <p className="font-medium text-white">{formatDate(current.measured_at)}</p>
-        {current.weight_kg && (
-          <span className="badge-gray">{current.weight_kg} kg</span>
-        )}
+        {weightLbs && <span className="badge-gray">{weightLbs} lbs</span>}
       </div>
+
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
         {measurementFields.filter(f => current[f.key]).map(f => {
-          const diff = previous ? getMeasurementDiff(current, previous, f.key) : null
+          const rawDiff = previous ? getMeasurementDiff(current, previous, f.key) : null
+          const dispVal = displayValue(f, current[f.key])
+          // Para mostrar el diff en la unidad correcta
+          const diffDisplay = rawDiff !== null
+            ? (f.convert ? (rawDiff * 2.20462).toFixed(1) : rawDiff.toFixed(1))
+            : null
+
+          // Color: depende del campo
+          const isGoodUp   = ['left_arm_cm','right_arm_cm','left_leg_cm','right_leg_cm','chest_cm'].includes(f.key)
+          const isGoodDown  = ['weight_kg','body_fat_pct','waist_cm','hips_cm'].includes(f.key)
+          const diffColor = rawDiff === null || rawDiff === 0 ? 'text-gray-500'
+            : isGoodDown  ? (rawDiff < 0 ? 'text-emerald-400' : 'text-red-400')
+            : isGoodUp    ? (rawDiff > 0 ? 'text-emerald-400' : 'text-red-400')
+            : 'text-gray-400'
+
           return (
             <div key={f.key} className="bg-gray-800/50 rounded-lg px-3 py-2">
               <p className="text-xs text-gray-500">{f.label}</p>
-              <p className="font-semibold text-white">{current[f.key]} {f.unit}</p>
-              {diff !== null && (
-                <p className={`text-xs flex items-center gap-0.5 ${diff > 0 ? 'text-red-400' : diff < 0 ? 'text-emerald-400' : 'text-gray-500'}`}>
-                  {diff > 0 ? <TrendingUp className="w-3 h-3" /> : diff < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
-                  {diff > 0 ? '+' : ''}{diff.toFixed(1)} {f.unit}
+              <p className="font-semibold text-white">{dispVal} <span className="text-xs text-gray-400">{f.unit}</span></p>
+              {diffDisplay !== null && rawDiff !== 0 && (
+                <p className={`text-xs flex items-center gap-0.5 mt-0.5 ${diffColor}`}>
+                  {rawDiff > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                  {Number(diffDisplay) > 0 ? '+' : ''}{diffDisplay} {f.unit}
                 </p>
               )}
             </div>
           )
         })}
       </div>
+
+      {/* Comentarios de progreso */}
+      {comments.length > 0 && (
+        <div className="bg-brand-500/5 border border-brand-500/20 rounded-xl px-3 py-2.5 space-y-1">
+          {comments.map((c, i) => (
+            <p key={i} className="text-xs text-brand-300">{c}</p>
+          ))}
+        </div>
+      )}
+
+      {current.notes && (
+        <p className="text-xs text-gray-500 italic">Nota: {current.notes}</p>
+      )}
     </div>
   )
 }
 
 function MeasurementForm({ memberId, onSave }) {
-  const [form, setForm] = useState({ measured_at: today() })
+  // El form guarda en lbs para peso — se convierte a kg al guardar en BD
+  const [form, setForm]   = useState({ measured_at: today() })
+  const [lbsInput, setLbsInput] = useState({}) // valores en lbs que el usuario escribe
   const [saving, setSaving] = useState(false)
 
   const handleSave = async () => {
     setSaving(true)
-    await onSave(form)
+    // Convertir peso de lbs a kg antes de guardar
+    const toSave = { ...form }
+    if (lbsInput.weight_kg) {
+      toSave.weight_kg = (parseFloat(lbsInput.weight_kg) / 2.20462).toFixed(2)
+    }
+    await onSave(toSave)
     setSaving(false)
   }
 
   return (
     <div className="space-y-3">
       <div>
-        <label className="label">Fecha</label>
+        <label className="label">Fecha de medición</label>
         <input type="date" className="input" value={form.measured_at}
           onChange={e => setForm({ ...form, measured_at: e.target.value })} />
       </div>
+      <p className="text-xs text-gray-500">Llena solo los campos que mediste. Deja vacío lo que no midió.</p>
       <div className="grid grid-cols-2 gap-3">
         {measurementFields.map(f => (
           <div key={f.key}>
@@ -582,19 +676,28 @@ function MeasurementForm({ memberId, onSave }) {
             <input
               type="number" step="0.1" className="input"
               placeholder={`0.0 ${f.unit}`}
-              value={form[f.key] || ''}
-              onChange={e => setForm({ ...form, [f.key]: e.target.value })}
+              value={f.key === 'weight_kg' ? (lbsInput.weight_kg || '') : (form[f.key] || '')}
+              onChange={e => {
+                if (f.key === 'weight_kg') {
+                  setLbsInput({ ...lbsInput, weight_kg: e.target.value })
+                } else {
+                  setForm({ ...form, [f.key]: e.target.value })
+                }
+              }}
             />
           </div>
         ))}
       </div>
       <div>
-        <label className="label">Notas</label>
+        <label className="label">Notas del entrenador</label>
         <textarea className="input" rows={2} value={form.notes || ''}
-          onChange={e => setForm({ ...form, notes: e.target.value })} />
+          onChange={e => setForm({ ...form, notes: e.target.value })}
+          placeholder="Observaciones del mes, recomendaciones..." />
       </div>
       <button className="btn-primary w-full" onClick={handleSave} disabled={saving}>
-        {saving ? 'Guardando...' : 'Guardar medidas'}
+        {saving ? (
+          <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Guardando...</>
+        ) : 'Guardar medidas'}
       </button>
     </div>
   )
@@ -1493,7 +1596,7 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
 
 👤 *${member?.profile?.full_name}*
 💰 *${formatCurrency(totalAmount)}*
-📅 Cuotas: ${selectedMonths.map(k => availableMonths.find(m => m.key === k)?.label).join(', ')}
+📅 Cuotas: ${selectedMonths.map(k => allMonths.find(m => m.key === k)?.label).join(', ')}
 
 Por favor revisar y aprobar ✅`
             const num = (import.meta.env.VITE_GYM_WHATSAPP || '').replace(/[^0-9]/g,'')
