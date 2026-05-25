@@ -1235,20 +1235,9 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   const [loading, setLoading] = useState(true)
   const [showNotifs, setShowNotifs] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
-  const [darkMode, setDarkMode] = useState(() => {
-    return localStorage.getItem('gymapp-theme') !== 'light'
-  })
+  
+  // useRef se mantiene para las notificaciones
   const prevNotifsCount = useRef(0)
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.remove('light')
-      localStorage.setItem('gymapp-theme', 'dark')
-    } else {
-      document.documentElement.classList.add('light')
-      localStorage.setItem('gymapp-theme', 'light')
-    }
-  }, [darkMode])
 
   // Sonido de notificación
   const playNotifSound = () => {
@@ -1267,6 +1256,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     } catch {}
   }
 
+  // ... (el resto del código loadData, useEffects y el return continúan igual)
   const loadData = useCallback(async () => {
     setLoading(true)
     const [mem, pl, notifs] = await Promise.all([
