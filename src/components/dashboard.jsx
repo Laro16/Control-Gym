@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Users, CreditCard, Bell, ChevronRight,
   Plus, Edit2, Trash2, Check, X, Download, FileText, FileSpreadsheet,
@@ -121,7 +121,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleTheme, onP
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <button className="btn-ghost p-2" onClick={onToggleTheme} title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
+            <button className="btn-ghost p-2" onClick={onToggleDark} title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <button className="relative btn-ghost p-2" onClick={() => { setShowNotifs(p => !p); setShowProfile(false); if (!showNotifs) { markAllNotificationsRead(profile.id); if(unread > 0) playNotifSound() } }}>
@@ -1235,8 +1235,6 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   const [loading, setLoading] = useState(true)
   const [showNotifs, setShowNotifs] = useState(false)
   const [showAccount, setShowAccount] = useState(false)
-  
-  // useRef se mantiene para las notificaciones
   const prevNotifsCount = useRef(0)
 
   // Sonido de notificación
@@ -1256,7 +1254,6 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     } catch {}
   }
 
-  // ... (el resto del código loadData, useEffects y el return continúan igual)
   const loadData = useCallback(async () => {
     setLoading(true)
     const [mem, pl, notifs] = await Promise.all([
