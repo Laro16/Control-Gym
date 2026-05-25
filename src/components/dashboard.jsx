@@ -121,7 +121,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleTheme, onP
             </span>
           </div>
           <div className="flex items-center gap-1">
-            <button className="btn-ghost p-2" onClick={onToggleDark} title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
+            <button className="btn-ghost p-2" onClick={onToggleTheme} title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
               {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <button className="relative btn-ghost p-2" onClick={() => { setShowNotifs(p => !p); setShowProfile(false); if (!showNotifs) { markAllNotificationsRead(profile.id); if(unread > 0) playNotifSound() } }}>
