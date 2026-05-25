@@ -4,10 +4,12 @@ import {
   Plus, Edit2, Trash2, Check, X, Download, FileText, FileSpreadsheet,
   Dumbbell, TrendingUp, TrendingDown, Minus, Camera, Calendar,
   LogOut, Home, ClipboardList, MessageCircle, Eye,
-  AlertCircle, CheckCircle, Clock, Banknote, AlertTriangle, Layers
+  AlertCircle, CheckCircle, Clock, Banknote, AlertTriangle, Layers,
+  Sun, Moon, User, Lock, Flame, Trophy, Star, Zap, Target
 } from 'lucide-react'
+import { playNotifSound, playAchievementSound } from '../App'
 import {
-  supabase, adminCreateUser,
+  supabase, adminCreateUser, updateMember as updateMemberRecord,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
   createPayment, updatePayment, createMeasurement, updateMeasurement,
   updateMember, deleteMember, getPlans, createPlan, updatePlan,
@@ -69,7 +71,7 @@ function ConfirmModal({ open, onClose, onConfirm, message }) {
 }
 
 // ── ADMIN DASHBOARD ────────────────────────────────────────
-export function AdminDashboard({ profile, onLogout }) {
+export function AdminDashboard({ profile, onLogout, darkMode, onToggleTheme, onProfileUpdate }) {
   const [tab, setTab] = useState('overview')
   const [members, setMembers] = useState([])
   const [payments, setPayments] = useState([])
@@ -77,6 +79,7 @@ export function AdminDashboard({ profile, onLogout }) {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNotifs, setShowNotifs] = useState(false)
+  const [showProfile, setShowProfile] = useState(false)
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -117,23 +120,19 @@ export function AdminDashboard({ profile, onLogout }) {
               Admin
             </span>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              className="relative btn-ghost p-2"
-              onClick={() => {
-                setShowNotifs(!showNotifs)
-                if (!showNotifs) markAllNotificationsRead(profile.id)
-              }}
-            >
-              <Bell className="w-5 h-5" />
-              {unread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {unread > 9 ? '9+' : unread}
-                </span>
-              )}
+          <div className="flex items-center gap-1">
+            <button className="btn-ghost p-2" onClick={onToggleDark} title={darkMode ? 'Modo claro' : 'Modo oscuro'}>
+              {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
-            <button className="btn-ghost p-2" onClick={onLogout}>
-              <LogOut className="w-5 h-5" />
+            <button className="relative btn-ghost p-2" onClick={() => { setShowNotifs(p => !p); setShowProfile(false); if (!showNotifs) { markAllNotificationsRead(profile.id); if(unread > 0) playNotifSound() } }}>
+              <Bell className="w-5 h-5" />
+              {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
+            </button>
+            <button className="btn-ghost p-1.5" onClick={() => { setShowProfile(p => !p); setShowNotifs(false) }} title="Mi perfil">
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} alt="avatar" className="w-7 h-7 rounded-full object-cover ring-2 ring-brand-500/30" />
+                : <div className="w-7 h-7 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center"><span className="text-xs font-bold text-brand-400">{profile.full_name?.[0]?.toUpperCase()}</span></div>
+              }
             </button>
           </div>
         </div>
@@ -141,7 +140,10 @@ export function AdminDashboard({ profile, onLogout }) {
         {/* Notificaciones dropdown */}
         {showNotifs && (
           <div className="absolute right-4 top-14 w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-96 overflow-y-auto">
-            <h4 className="font-semibold text-sm text-gray-400 mb-3">Notificaciones</h4>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-sm text-gray-300">Notificaciones</h4>
+              <button onClick={() => { markAllNotificationsRead(profile.id); setShowNotifs(false) }} className="text-xs text-gray-500 hover:text-white">Marcar leídas</button>
+            </div>
             {notifications.length === 0 ? (
               <p className="text-gray-500 text-sm">Sin notificaciones</p>
             ) : notifications.slice(0, 20).map(n => (
@@ -151,6 +153,26 @@ export function AdminDashboard({ profile, onLogout }) {
                 <p className="text-xs text-gray-600 mt-0.5">{formatDate(n.created_at)}</p>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Perfil dropdown admin */}
+        {showProfile && (
+          <div className="absolute right-4 top-14 w-64 card border border-gray-700 shadow-2xl z-50 animate-slide-up">
+            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
+                : <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center"><span className="font-bold text-brand-400">{profile.full_name?.[0]?.toUpperCase()}</span></div>
+              }
+              <div>
+                <p className="font-semibold text-white text-sm">{profile.full_name}</p>
+                <p className="text-xs text-gray-500">{profile.email}</p>
+                <span className="text-[10px] bg-brand-500/10 text-brand-400 px-1.5 py-0.5 rounded-full">Admin</span>
+              </div>
+            </div>
+            <button onClick={onLogout} className="w-full flex items-center gap-2 text-red-400 hover:text-red-300 text-sm py-2 px-1 rounded-lg hover:bg-red-500/10 transition-all">
+              <LogOut className="w-4 h-4" /> Cerrar sesión
+            </button>
           </div>
         )}
       </header>
@@ -1201,7 +1223,7 @@ function AdminReports({ members, payments }) {
 // ════════════════════════════════════════════════════════════
 // USER DASHBOARD
 // ════════════════════════════════════════════════════════════
-export function UserDashboard({ profile, onLogout }) {
+export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onProfileUpdate }) {
   const [tab, setTab] = useState('home')
   const [member, setMember] = useState(null)
   const [payments, setPayments] = useState([])
@@ -1212,6 +1234,38 @@ export function UserDashboard({ profile, onLogout }) {
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNotifs, setShowNotifs] = useState(false)
+  const [showAccount, setShowAccount] = useState(false)
+  const [darkMode, setDarkMode] = useState(() => {
+    return localStorage.getItem('gymapp-theme') !== 'light'
+  })
+  const prevNotifsCount = useRef(0)
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.remove('light')
+      localStorage.setItem('gymapp-theme', 'dark')
+    } else {
+      document.documentElement.classList.add('light')
+      localStorage.setItem('gymapp-theme', 'light')
+    }
+  }, [darkMode])
+
+  // Sonido de notificación
+  const playNotifSound = () => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      const o = ctx.createOscillator()
+      const g = ctx.createGain()
+      o.connect(g)
+      g.connect(ctx.destination)
+      o.frequency.setValueAtTime(880, ctx.currentTime)
+      o.frequency.setValueAtTime(1100, ctx.currentTime + 0.1)
+      g.gain.setValueAtTime(0.3, ctx.currentTime)
+      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
+      o.start(ctx.currentTime)
+      o.stop(ctx.currentTime + 0.4)
+    } catch {}
+  }
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -1242,7 +1296,12 @@ export function UserDashboard({ profile, onLogout }) {
 
   useEffect(() => { loadData() }, [loadData])
 
+  // Sonar cuando llegan nuevas notificaciones
   const unread = notifications.filter(n => !n.is_read).length
+  useEffect(() => {
+    if (unread > prevNotifsCount.current) playNotifSound()
+    prevNotifsCount.current = unread
+  }, [unread])
 
   const tabs = [
     { id: 'home',       label: 'Inicio',    icon: Home },
@@ -1262,28 +1321,53 @@ export function UserDashboard({ profile, onLogout }) {
               {import.meta.env.VITE_GYM_NAME || 'GymApp'}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
+            {/* Modo claro/oscuro */}
+            <button className="btn-ghost p-2" onClick={onToggleDark} title={darkMode ? "Modo claro" : "Modo oscuro"}>
+              {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            </button>
+            {/* Notificaciones */}
             <button className="relative btn-ghost p-2" onClick={() => {
               setShowNotifs(!showNotifs)
+              setShowAccount(false)
               if (!showNotifs) markAllNotificationsRead(profile.id)
             }}>
               <Bell className="w-5 h-5" />
               {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
             </button>
-            <button className="btn-ghost p-2" onClick={onLogout}><LogOut className="w-5 h-5" /></button>
+            {/* Avatar / cuenta */}
+            <button className="btn-ghost p-1" onClick={() => { setShowAccount(!showAccount); setShowNotifs(false) }}>
+              {profile.avatar_url
+                ? <img src={profile.avatar_url} alt="avatar" className="w-8 h-8 rounded-full object-cover border-2 border-brand-500/40" />
+                : <div className="w-8 h-8 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
+                    <span className="text-brand-400 text-sm font-bold">{profile.full_name?.[0]?.toUpperCase()}</span>
+                  </div>
+              }
+            </button>
           </div>
         </div>
         {showNotifs && (
           <div className="absolute right-4 top-14 w-72 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-80 overflow-y-auto">
+            <p className="text-xs font-semibold text-gray-500 mb-2">Notificaciones</p>
             {notifications.length === 0 ? <p className="text-gray-500 text-sm">Sin notificaciones</p> :
               notifications.slice(0, 15).map(n => (
                 <div key={n.id} className={`py-2.5 border-b border-gray-800 last:border-0 ${!n.is_read ? 'opacity-100' : 'opacity-50'}`}>
                   <p className="text-sm font-medium text-white">{n.title}</p>
                   <p className="text-xs text-gray-400">{n.message}</p>
+                  <p className="text-xs text-gray-600 mt-0.5">{formatDate(n.created_at)}</p>
                 </div>
               ))
             }
           </div>
+        )}
+        {showAccount && (
+          <UserAccountPanel
+            profile={profile}
+            member={member}
+            onClose={() => setShowAccount(false)}
+            onLogout={onLogout}
+            onRefresh={loadData}
+          />
         )}
       </header>
 
@@ -1308,7 +1392,7 @@ export function UserDashboard({ profile, onLogout }) {
             {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} />}
             {tab === 'payments' && <UserPayments payments={payments} member={member} onRefresh={loadData} />}
             {tab === 'body'     && <UserBody measurements={measurements} photos={photos} member={member} onRefresh={loadData} />}
-            {tab === 'streak'   && <UserStreak attendance={attendance} member={member} onRefresh={loadData} />}
+            {tab === 'streak'   && <UserStreak attendance={attendance} member={member} onRefresh={loadData} profile={profile} />}
             {tab === 'plans'    && <UserPlans plans={plans} currentPlanId={member?.plan_id} />}
           </>
         )}
@@ -1867,83 +1951,332 @@ function UserBody({ measurements, photos, member, onRefresh }) {
   )
 }
 
+// ── LOGROS / ACHIEVEMENTS ─────────────────────────────────
+const ACHIEVEMENTS = [
+  { id: 'week1',    days: 5,   icon: '⚡', title: 'Chispa',      subtitle: '¡Primera semana completada!',    color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  border: 'border-yellow-500/30' },
+  { id: 'week2',    days: 10,  icon: '🔥', title: 'En llamas',   subtitle: '¡Dos semanas sin parar!',        color: 'text-orange-400',  bg: 'bg-orange-500/10',  border: 'border-orange-500/30' },
+  { id: 'week3',    days: 15,  icon: '💪', title: 'Guerrero',    subtitle: '¡Tres semanas de hierro!',       color: 'text-brand-400',   bg: 'bg-brand-500/10',   border: 'border-brand-500/30' },
+  { id: 'month1',   days: 21,  icon: '🏆', title: 'Iron Man',    subtitle: '¡Un mes entero de racha!',       color: 'text-amber-400',   bg: 'bg-amber-500/10',   border: 'border-amber-500/30' },
+  { id: 'month2',   days: 42,  icon: '👑', title: 'Leyenda',     subtitle: '¡Dos meses sin rendirse!',       color: 'text-purple-400',  bg: 'bg-purple-500/10',  border: 'border-purple-500/30' },
+  { id: 'month3',   days: 63,  icon: '🌟', title: 'Élite',       subtitle: '¡Tres meses de dedicación!',     color: 'text-cyan-400',    bg: 'bg-cyan-500/10',    border: 'border-cyan-500/30' },
+  { id: 'month6',   days: 126, icon: '💎', title: 'Diamante',    subtitle: '¡Seis meses de superación!',     color: 'text-sky-400',     bg: 'bg-sky-500/10',     border: 'border-sky-500/30' },
+]
+
+const MOTIVATIONAL = [
+  { min: 0,   text: '¡Inicia tu racha hoy! Cada campeón empezó desde cero.', emoji: '🚀' },
+  { min: 1,   text: '¡Buen comienzo! El primer paso es el más importante.', emoji: '👣' },
+  { min: 3,   text: '¡Buen ritmo! Ya estás formando el hábito.', emoji: '💫' },
+  { min: 5,   text: '¡Una semana! Estás en fuego. ¡No pares!', emoji: '🔥' },
+  { min: 10,  text: '¡Imparable! Dos semanas de consistencia pura.', emoji: '⚡' },
+  { min: 15,  text: '¡Tres semanas! Ya eres un guerrero del gimnasio.', emoji: '💪' },
+  { min: 21,  text: '¡UN MES! ¡Eres una leyenda viviente!', emoji: '🏆' },
+  { min: 42,  text: '¡DOS MESES! Pocos llegan hasta aquí. ¡Eres élite!', emoji: '👑' },
+  { min: 63,  text: '¡TRES MESES! Eres la inspiración del gimnasio.', emoji: '🌟' },
+]
+
+function getMotivational(streak) {
+  const msgs = [...MOTIVATIONAL].reverse()
+  return msgs.find(m => streak >= m.min) || MOTIVATIONAL[0]
+}
+
 // ── USER STREAK ────────────────────────────────────────────
-function UserStreak({ attendance, member, onRefresh }) {
+function UserStreak({ attendance, member, onRefresh, profile }) {
   const [marking, setMarking] = useState(false)
+  const [celebrated, setCelebrated] = useState(false)
 
   const streak = calculateStreak(attendance)
+  const bestStreak = member?.best_streak || 0
   const attended = new Set(attendance.map(a => a.attended_date))
   const todayStr = today()
   const markedToday = attended.has(todayStr)
+  const motivational = getMotivational(streak)
+
+  // Logros desbloqueados
+  const unlocked = ACHIEVEMENTS.filter(a => streak >= a.days)
+  const nextAchievement = ACHIEVEMENTS.find(a => streak < a.days)
 
   const handleToggleToday = async () => {
     if (!member) return
     setMarking(true)
-    if (markedToday) await removeAttendance(member.id, todayStr)
-    else await markAttendance(member.id, todayStr)
+
+    if (markedToday) {
+      await removeAttendance(member.id, todayStr)
+    } else {
+      await markAttendance(member.id, todayStr)
+      const newStreak = streak + 1
+
+      // Actualizar best_streak si se superó
+      if (newStreak > bestStreak) {
+        await supabase.from('members').update({ best_streak: newStreak }).eq('id', member.id)
+      }
+
+      // Verificar si se desbloqueó un logro
+      const newAchievement = ACHIEVEMENTS.find(a => newStreak === a.days)
+      if (newAchievement) {
+        setCelebrated(true)
+        playAchievementSound()
+        setTimeout(() => setCelebrated(false), 4000)
+        await createNotification({
+          profile_id: profile.id,
+          type: 'custom',
+          title: `Logro desbloqueado: ${newAchievement.icon} ${newAchievement.title}`,
+          message: `${newAchievement.subtitle} Llevas ${newAchievement.days} días de racha activa.`,
+        })
+      }
+    }
+
     onRefresh()
     setMarking(false)
   }
 
-  // Generar los últimos 35 días para el calendario visual
+  // Calendario 35 días con código de colores
   const calDays = []
   for (let i = 34; i >= 0; i--) {
     const d = new Date()
     d.setDate(d.getDate() - i)
     const str = d.toISOString().split('T')[0]
-    const dow = d.getDay()
-    calDays.push({ date: str, dow, attended: attended.has(str), isSunday: dow === 0 })
+    const dow = d.getDay() // 0=dom, 6=sab
+    const isSunday   = dow === 0
+    const isSaturday = dow === 6
+    const isToday    = str === todayStr
+    const isFuture   = str > todayStr
+    const didAttend  = attended.has(str)
+    // Día fallado: semana, pasado, no asistió, no domingo
+    const isMissed   = !isSunday && !isSaturday && !isToday && !isFuture && !didAttend
+
+    calDays.push({ date: str, dow, didAttend, isSunday, isSaturday, isToday, isMissed })
   }
 
+  // Alinear el primer día al lunes
+  const firstDow = calDays[0].dow // 0=dom
+  const offset = firstDow === 0 ? 6 : firstDow - 1 // L=0,M=1,...,D=6
+  const emptyBefore = Array(offset).fill(null)
+
   return (
-    <div className="space-y-5 animate-fade-in">
+    <div className="space-y-4 animate-fade-in">
       <h2 className="section-title">Mi racha</h2>
 
-      {/* Streak counter */}
-      <div className="card text-center py-6">
-        <div className="text-6xl font-display tracking-wider text-brand-400">{streak}</div>
-        <p className="text-gray-400 mt-1">días de racha activa 🔥</p>
-        <p className="text-xs text-gray-600 mt-2">Los domingos no cuentan · Sábado es opcional</p>
+      {/* Celebración logro */}
+      {celebrated && (
+        <div className="card border-amber-500/40 bg-amber-500/5 text-center py-4 animate-slide-up">
+          <div className="text-3xl mb-1">{unlocked[unlocked.length-1]?.icon}</div>
+          <p className="font-bold text-amber-400">¡Logro desbloqueado!</p>
+          <p className="text-sm text-gray-400 mt-1">{unlocked[unlocked.length-1]?.subtitle}</p>
+        </div>
+      )}
+
+      {/* Contador principal */}
+      <div className="card text-center py-6 relative overflow-hidden">
+        <div className="absolute inset-0 flex items-center justify-center opacity-5">
+          <Flame className="w-48 h-48 text-brand-500" />
+        </div>
+        <div className="relative">
+          <div className="text-7xl font-display tracking-wider text-brand-400 leading-none">{streak}</div>
+          <div className="flex items-center justify-center gap-1 mt-1">
+            <Flame className="w-4 h-4 text-brand-500" />
+            <p className="text-gray-300 font-medium">días de racha</p>
+          </div>
+          <p className="text-sm mt-2">{motivational.emoji} <span className="text-gray-400">{motivational.text}</span></p>
+          {bestStreak > 0 && (
+            <p className="text-xs text-gray-600 mt-2 flex items-center justify-center gap-1">
+              <Trophy className="w-3 h-3" /> Mejor racha histórica: <span className="text-gray-400 font-semibold">{bestStreak} días</span>
+            </p>
+          )}
+          {nextAchievement && (
+            <p className="text-xs text-gray-600 mt-1">
+              Próximo logro: <span className="text-brand-400">{nextAchievement.icon} {nextAchievement.title}</span> en {nextAchievement.days - streak} días
+            </p>
+          )}
+        </div>
       </div>
 
-      {/* Marcar hoy */}
+      {/* Botón marcar */}
       <button
-        className={`w-full py-4 rounded-2xl font-semibold text-base flex items-center justify-center gap-3 transition-all active:scale-95 ${markedToday ? 'bg-emerald-500/10 border border-emerald-500/30 text-emerald-400' : 'btn-primary'}`}
+        className={`w-full py-4 rounded-2xl font-semibold text-base flex items-center justify-center gap-3 transition-all active:scale-95
+          ${markedToday ? 'bg-emerald-500/10 border-2 border-emerald-500/40 text-emerald-400' : 'btn-primary'}`}
         onClick={handleToggleToday}
         disabled={marking}
       >
-        {marking ? (
-          <span className="w-5 h-5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-        ) : markedToday ? (
-          <><CheckCircle className="w-5 h-5" /> Entrenamiento marcado hoy</>
-        ) : (
-          <><Dumbbell className="w-5 h-5" /> Marcar entrenamiento de hoy</>
-        )}
+        {marking
+          ? <span className="w-5 h-5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+          : markedToday
+            ? <><CheckCircle className="w-5 h-5" /> ✅ Entrenamiento completado hoy</>
+            : <><Dumbbell className="w-5 h-5" /> Marcar entrenamiento de hoy</>
+        }
       </button>
 
-      {/* Calendario */}
+      {/* Calendario visual */}
       <div className="card">
-        <p className="text-xs text-gray-500 mb-3">Últimos 35 días</p>
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs text-gray-500 font-medium">Últimos 35 días</p>
+          <div className="flex items-center gap-3 text-[10px] text-gray-600">
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-brand-500 inline-block" /> Asistí</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-red-900/60 inline-block" /> Fallé</span>
+            <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-sm bg-gray-800/50 inline-block" /> Libre</span>
+          </div>
+        </div>
         <div className="grid grid-cols-7 gap-1">
-          {['L', 'M', 'X', 'J', 'V', 'S', 'D'].map(d => (
-            <div key={d} className="text-center text-xs text-gray-600 font-medium py-1">{d}</div>
+          {['L','M','X','J','V','S','D'].map(d => (
+            <div key={d} className="text-center text-[10px] text-gray-600 font-medium py-1">{d}</div>
           ))}
-          {calDays.map(d => (
-            <div
-              key={d.date}
-              title={d.date}
-              className={`aspect-square rounded-lg flex items-center justify-center text-xs font-medium transition-all
-                ${d.isSunday ? 'bg-gray-800/30 text-gray-700' :
-                  d.attended ? 'bg-brand-500 text-white shadow-sm shadow-brand-500/30' :
-                  d.date === todayStr ? 'border border-brand-500/50 text-brand-400' :
-                  'bg-gray-800/30 text-gray-600'
-                }`}
-            >
-              {new Date(d.date + 'T12:00:00').getDate()}
-            </div>
-          ))}
+          {emptyBefore.map((_, i) => <div key={`e${i}`} />)}
+          {calDays.map(d => {
+            let cls = 'bg-gray-800/20 text-gray-700'
+            if (d.isSunday)      cls = 'bg-gray-800/10 text-gray-800 opacity-50'
+            else if (d.isSaturday && !d.didAttend) cls = 'bg-gray-800/20 text-gray-700 border border-dashed border-gray-700'
+            else if (d.didAttend) cls = 'bg-brand-500 text-white shadow shadow-brand-500/40 font-bold'
+            else if (d.isMissed)  cls = 'bg-red-950/60 text-red-700'
+            else if (d.isToday)   cls = 'border-2 border-brand-500 text-brand-400 font-bold animate-pulse-slow'
+
+            return (
+              <div key={d.date} title={d.date}
+                className={`aspect-square rounded-md flex items-center justify-center text-[10px] transition-all ${cls}`}>
+                {new Date(d.date + 'T12:00:00').getDate()}
+              </div>
+            )
+          })}
+        </div>
+        <p className="text-[10px] text-gray-700 mt-2 text-center">Domingos no cuentan · Sábados son opcionales</p>
+      </div>
+
+      {/* Logros */}
+      <div>
+        <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-amber-400" /> Logros
+        </h3>
+        <div className="grid grid-cols-2 gap-2">
+          {ACHIEVEMENTS.map(a => {
+            const done = streak >= a.days
+            return (
+              <div key={a.id} className={`rounded-xl border px-3 py-3 transition-all ${done ? `${a.bg} ${a.border}` : 'bg-gray-800/20 border-gray-800 opacity-40'}`}>
+                <div className="text-2xl mb-1">{a.icon}</div>
+                <p className={`text-sm font-bold ${done ? a.color : 'text-gray-500'}`}>{a.title}</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">{a.subtitle}</p>
+                <p className={`text-[10px] mt-1 font-medium ${done ? a.color : 'text-gray-600'}`}>
+                  {done ? '✓ Desbloqueado' : `${a.days} días`}
+                </p>
+              </div>
+            )
+          })}
         </div>
       </div>
+    </div>
+  )
+}
+
+
+// ── USER ACCOUNT PANEL ─────────────────────────────────────
+function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh }) {
+  const [tab, setTab]           = useState('profile')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPass, setConfirmPass] = useState('')
+  const [saving, setSaving]     = useState(false)
+  const [msg, setMsg]           = useState('')
+  const [uploading, setUploading] = useState(false)
+
+  const age = profile.birth_date
+    ? Math.floor((Date.now() - new Date(profile.birth_date)) / (365.25 * 24 * 3600 * 1000))
+    : null
+
+  const handleChangePassword = async () => {
+    if (newPassword.length < 6) { setMsg('Mínimo 6 caracteres'); return }
+    if (newPassword !== confirmPass) { setMsg('Las contraseñas no coinciden'); return }
+    setSaving(true)
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    setSaving(false)
+    if (error) setMsg('Error: ' + error.message)
+    else { setMsg('✅ Contraseña actualizada'); setNewPassword(''); setConfirmPass('') }
+  }
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploading(true)
+    const ext  = file.name.split('.').pop()
+    const path = `${profile.id}/avatar.${ext}`
+    const { error } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
+    if (!error) {
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+      await supabase.from('profiles').update({ avatar_url: urlData.publicUrl }).eq('id', profile.id)
+      onRefresh()
+    }
+    setUploading(false)
+  }
+
+  return (
+    <div className="absolute right-4 top-14 w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up">
+      {/* Header cuenta */}
+      <div className="flex items-center gap-3 pb-3 mb-3 border-b border-gray-800">
+        <div className="relative">
+          {profile.avatar_url
+            ? <img src={profile.avatar_url} alt="avatar" className="w-12 h-12 rounded-full object-cover border-2 border-brand-500/40" />
+            : <div className="w-12 h-12 rounded-full bg-brand-500/20 border-2 border-brand-500/30 flex items-center justify-center">
+                <span className="text-brand-400 text-lg font-bold">{profile.full_name?.[0]?.toUpperCase()}</span>
+              </div>
+          }
+          <label className="absolute -bottom-1 -right-1 w-5 h-5 bg-brand-500 rounded-full flex items-center justify-center cursor-pointer hover:bg-brand-600 transition-colors">
+            <Camera className="w-2.5 h-2.5 text-white" />
+            <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} disabled={uploading} />
+          </label>
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold text-white text-sm truncate">{profile.full_name}</p>
+          <p className="text-xs text-gray-500 truncate">{profile.email}</p>
+          {age && <p className="text-xs text-gray-600">{age} años</p>}
+        </div>
+        <button onClick={onClose} className="p-1 text-gray-500 hover:text-white"><X className="w-4 h-4" /></button>
+      </div>
+
+      {/* Sub-tabs */}
+      <div className="flex gap-1 mb-3">
+        {[{id:'profile',label:'Mi ficha'},{id:'password',label:'Contraseña'}].map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)}
+            className={`flex-1 py-1.5 rounded-lg text-xs font-medium transition-all
+              ${tab === t.id ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-gray-500 hover:text-white'}`}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'profile' && (
+        <div className="space-y-2 text-sm">
+          {[
+            { label: 'Nombre',       value: profile.full_name },
+            { label: 'Email',        value: profile.email },
+            { label: 'Teléfono',     value: profile.phone || '—' },
+            { label: 'Edad',         value: age ? `${age} años` : '—' },
+            { label: 'Plan',         value: member?.plan?.name || '—' },
+            { label: 'Miembro desde',value: formatDate(member?.start_date) },
+          ].map(r => (
+            <div key={r.label} className="flex justify-between py-1.5 border-b border-gray-800/50">
+              <span className="text-gray-500">{r.label}</span>
+              <span className="text-white font-medium">{r.value}</span>
+            </div>
+          ))}
+          <button onClick={() => { onClose(); onLogout() }} className="btn-danger w-full mt-3 text-sm">
+            <LogOut className="w-3.5 h-3.5" /> Cerrar sesión
+          </button>
+        </div>
+      )}
+
+      {tab === 'password' && (
+        <div className="space-y-3">
+          <div>
+            <label className="label">Nueva contraseña</label>
+            <input type="password" className="input text-sm" placeholder="Mínimo 6 caracteres"
+              value={newPassword} onChange={e => setNewPassword(e.target.value)} />
+          </div>
+          <div>
+            <label className="label">Confirmar contraseña</label>
+            <input type="password" className="input text-sm" placeholder="Repite la contraseña"
+              value={confirmPass} onChange={e => setConfirmPass(e.target.value)} />
+          </div>
+          {msg && <p className={`text-xs ${msg.startsWith('✅') ? 'text-emerald-400' : 'text-red-400'}`}>{msg}</p>}
+          <button className="btn-primary w-full text-sm" onClick={handleChangePassword} disabled={saving}>
+            {saving ? 'Guardando...' : <><Lock className="w-3.5 h-3.5" /> Cambiar contraseña</>}
+          </button>
+        </div>
+      )}
     </div>
   )
 }
