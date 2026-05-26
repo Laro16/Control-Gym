@@ -17,8 +17,7 @@ import { AdminPlans } from './AdminPlans'
 import { AdminReports } from './AdminReports'
 
 // ── ADMIN DASHBOARD ────────────────────────────────────────
-export function AdminDashboard({ profile, onLogout, darkMode, onToggleTheme, onProfileUpdate }) {
-  const [tab, setTab] = useState('overview')
+export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, onProfileUpdate }) {  const [tab, setTab] = useState('overview')
   const [members, setMembers] = useState([])
   const [payments, setPayments] = useState([])
   const [plans, setPlans] = useState([])
