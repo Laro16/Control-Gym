@@ -28,7 +28,7 @@ import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner } from './shared'
 
 // ── OVERVIEW ───────────────────────────────────────────────
-function AdminOverview({ members, payments, profile, onNavigate }) {
+export function AdminOverview({ members, payments, profile, onNavigate }) {
   const [filter, setFilter] = useState(null) // null | 'active' | 'pending' | 'overdue'
 
   const active = members.filter(m => m.status === 'active').length
