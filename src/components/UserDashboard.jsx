@@ -172,7 +172,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
         {loading ? <Spinner /> : (
           <>
-            {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} />}
+            {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} attendance={attendance} onNavigate={setTab} />}
             {tab === 'payments' && <UserPayments payments={payments} member={member} onRefresh={loadData} />}
             {tab === 'body'     && <UserBody measurements={measurements} photos={photos} member={member} onRefresh={loadData} />}
             {tab === 'streak'   && <UserStreak attendance={attendance} member={member} onRefresh={loadData} profile={profile} />}
