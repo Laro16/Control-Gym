@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { X, Check } from 'lucide-react'
+import { paymentStatusLabel } from '../utils/helpers'
 
 export function StatusDot({ status }) {
   const s = paymentStatusLabel[status] || paymentStatusLabel.current
