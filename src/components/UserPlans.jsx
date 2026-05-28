@@ -1,13 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import {
-  Users, CreditCard, Bell, ChevronRight,
-  Plus, Edit2, Trash2, Check, X, Download, FileText, FileSpreadsheet,
-  Dumbbell, TrendingUp, TrendingDown, Minus, Camera, Calendar,
-  LogOut, Home, ClipboardList, MessageCircle, Eye,
-  AlertCircle, CheckCircle, Clock, Banknote, AlertTriangle, Layers,
-  Sun, Moon, Lock, Flame, Trophy, Star
-} from 'lucide-react'
-import { playNotifSound, playAchievementSound } from '../App'
+import { Check, ClipboardList } from 'lucide-react'
 import {
   supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
