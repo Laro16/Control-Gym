@@ -33,23 +33,6 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   const [showAccount, setShowAccount] = useState(false)
   const prevNotifsCount = useRef(0)
 
-  // Sonido de notificación
-  const playNotifSound = () => {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      const o = ctx.createOscillator()
-      const g = ctx.createGain()
-      o.connect(g)
-      g.connect(ctx.destination)
-      o.frequency.setValueAtTime(880, ctx.currentTime)
-      o.frequency.setValueAtTime(1100, ctx.currentTime + 0.1)
-      g.gain.setValueAtTime(0.3, ctx.currentTime)
-      g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4)
-      o.start(ctx.currentTime)
-      o.stop(ctx.currentTime + 0.4)
-    } catch {}
-  }
-
   const loadData = useCallback(async () => {
     setLoading(true)
     const [mem, pl, notifs] = await Promise.all([
