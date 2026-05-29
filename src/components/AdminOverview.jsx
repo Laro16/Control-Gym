@@ -14,7 +14,7 @@ import {
   markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto
 } from '../supabase'
 import {
-  formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
+  formatDate, formatCurrency, getPaymentStatus, getMemberPaymentStatus, paymentStatusLabel,
   approvalStatusLabel, measurementFields, getMeasurementDiff,
   displayValue, getMeasurementComment, daysBetween,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
@@ -29,15 +29,7 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
 
   const active = members.filter(m => m.status === 'active').length
   const pendingPayments = payments.filter(p => p.status === 'pending')
-  const overdueMembers = members.filter(m => {
-    const mp = payments.filter(p => p.member_id === m.id && p.status !== 'rejected')
-    // Sin pagos y ya pasó el mes de inicio → vencida
-    if (!mp.length) {
-      // Más de 30 días desde inicio sin pagos → vencido
-      return m.start_date ? daysBetween(m.start_date, today()) > 30 : false
-    }
-    return getPaymentStatus(mp[0].due_date) === 'overdue'
-  })
+  const overdueMembers = members.filter(m => getMemberPaymentStatus(m, payments) === 'overdue')
   const totalMonth = payments
     .filter(p => p.status === 'approved' && p.payment_date?.startsWith(new Date().toISOString().slice(0, 7)))
     .reduce((a, p) => a + Number(p.amount), 0)
@@ -146,8 +138,7 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
           {filteredMembers.map(m => {
             const mp = payments.filter(p => p.member_id === m.id && p.status !== 'rejected')
             const last = mp[0]
-            // Sin pagos → "Sin pago" en rojo (no "Al día")
-            const st = !last ? 'no_payment' : getPaymentStatus(last.due_date)
+            const st = getMemberPaymentStatus(m, payments)
             const stLabel = paymentStatusLabel[st]
             return (
               <div key={m.id} className="card flex items-center justify-between py-3 gap-3">
