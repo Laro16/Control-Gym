@@ -31,18 +31,46 @@ export const daysBetween = (a, b) => {
 }
 
 // ── ESTADO DE PAGO ─────────────────────────────────────────
+// Calcula el estado de una cuota según su due_date
 export const getPaymentStatus = (dueDate) => {
+  if (!dueDate) return 'no_payment'
   const diff = daysBetween(today(), dueDate)
-  if (diff < 0) return 'overdue'      // vencida
-  if (diff <= 5) return 'due_soon'    // próxima a vencer
-  return 'current'                    // al día
+  if (diff < 0)   return 'overdue'   // vencida
+  if (diff <= 5)  return 'due_soon'  // próxima a vencer (menos de 5 días)
+  return 'current'                   // al día
+}
+
+// Calcula el estado de un miembro considerando pagos Y fecha de inicio
+// Lógica:
+//   - Sin pagos + más de 30 días desde inicio → vencida
+//   - Sin pagos + menos de 30 días desde inicio → nuevo (primer mes corriendo)
+//   - Con último pago aprobado → estado por due_date
+//   - Con pago pendiente → pendiente de aprobación
+export const getMemberPaymentStatus = (member, payments) => {
+  const memberPayments = (payments || []).filter(
+    p => p.member_id === member.id && p.status !== 'rejected'
+  )
+
+  if (!memberPayments.length) {
+    if (!member.start_date) return 'no_payment'
+    const days = daysBetween(member.start_date, today())
+    // Primer mes gratis o pendiente de registrar pago
+    return days > 30 ? 'overdue' : 'new_member'
+  }
+
+  // Tiene pagos — revisar el más reciente
+  const last = memberPayments[0]
+  if (last.status === 'pending') return 'pending_approval'
+  return getPaymentStatus(last.due_date)
 }
 
 export const paymentStatusLabel = {
-  overdue:   { text: 'Vencida',          cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10' },
-  due_soon:  { text: 'Próxima a vencer', cls: 'badge-yellow', dot: 'bg-yellow-400',  bg: 'bg-yellow-500/10' },
-  current:   { text: 'Al día',           cls: 'badge-green',  dot: 'bg-emerald-400', bg: 'bg-emerald-500/10' },
-  no_payment:{ text: 'Sin pago',         cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10' },
+  overdue:          { text: 'Vencida',              cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10'    },
+  due_soon:         { text: 'Próxima a vencer',     cls: 'badge-yellow', dot: 'bg-yellow-400',  bg: 'bg-yellow-500/10' },
+  current:          { text: 'Al día',               cls: 'badge-green',  dot: 'bg-emerald-400', bg: 'bg-emerald-500/10'},
+  no_payment:       { text: 'Sin pago',             cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10'    },
+  new_member:       { text: 'Primer mes',           cls: 'badge-gray',   dot: 'bg-gray-400',    bg: 'bg-gray-700/30'   },
+  pending_approval: { text: 'Pendiente aprobación', cls: 'badge-yellow', dot: 'bg-yellow-400',  bg: 'bg-yellow-500/10' },
 }
 
 export const approvalStatusLabel = {
@@ -111,31 +139,53 @@ export const getMeasurementDiff = (current, previous, key) => {
 }
 
 // ── RACHA ──────────────────────────────────────────────────
+// Reglas:
+// - Domingos: no cuentan, no rompen
+// - Sábados:  opcional, no rompe si no asiste
+// - L-V:      si no asiste, rompe la racha
+// - Hoy:      si aún no marcó hoy, la racha se calcula desde ayer
+//             para no mostrar 0 injustamente durante el día
 export const calculateStreak = (attendanceDates) => {
   if (!attendanceDates?.length) return 0
   const attended = new Set(attendanceDates.map(a => a.attended_date))
+
+  const todayStr  = new Date().toISOString().split('T')[0]
+  const markedToday = attended.has(todayStr)
+
   let streak = 0
-  let check = new Date()
+  let check  = new Date()
+
+  // Si hoy no está marcado y es día de semana (L-V),
+  // empezamos desde ayer para no mostrar 0 innecesariamente
+  if (!markedToday) {
+    const dow = check.getDay()
+    if (dow !== 0 && dow !== 6) {
+      check.setDate(check.getDate() - 1)
+    }
+  }
 
   for (let i = 0; i < 365; i++) {
-    const dow = check.getDay() // 0=domingo, 6=sábado
+    const dow     = check.getDay()
     const dateStr = check.toISOString().split('T')[0]
 
-    if (dow === 0) { // domingo: saltar sin romper
+    // Domingo: nunca cuenta, nunca rompe
+    if (dow === 0) {
       check.setDate(check.getDate() - 1)
       continue
     }
 
     if (attended.has(dateStr)) {
       streak++
-    } else if (dow === 6) { // sábado sin asistir: no rompe
-      // continúa
+    } else if (dow === 6) {
+      // Sábado sin asistir: no rompe
     } else {
-      break // día de semana sin asistir: racha rota
+      // Lunes-Viernes sin asistir: rompe
+      break
     }
 
     check.setDate(check.getDate() - 1)
   }
+
   return streak
 }
 
