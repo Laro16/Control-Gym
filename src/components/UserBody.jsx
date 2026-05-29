@@ -350,8 +350,7 @@ export function UserBody({ measurements, photos, member, onRefresh }) {
             </span>
             <input
               type="file"
-              accept="image/*"
-              capture="environment"
+              accept="image/jpeg,image/png,image/webp,image/heic"
               className="hidden"
               onChange={handlePhotoUpload}
               disabled={uploading}
