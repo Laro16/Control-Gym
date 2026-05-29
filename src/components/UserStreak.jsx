@@ -307,22 +307,43 @@ export function UserStreak({ attendance, member, onRefresh, profile }) {
         </div>
       </div>
 
-      {/* Botón marcar */}
-      <button
-        className={`w-full py-4 rounded-2xl font-semibold text-base flex items-center justify-center gap-3 transition-all active:scale-95 duration-150
-          ${markedToday
-            ? 'bg-emerald-500/10 border-2 border-emerald-500/40 text-emerald-400'
-            : 'btn-primary text-lg'}`}
-        onClick={handleToggleToday}
-        disabled={marking}
-      >
-        {marking
-          ? <span className="w-5 h-5 border-2 border-current/30 border-t-current rounded-full animate-spin" />
-          : markedToday
-            ? <><CheckCircle className="w-5 h-5" /> ¡Entrenamiento de hoy completado!</>
+      {/* Botón marcar / estado */}
+      {markedToday ? (
+        <div className="rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 px-5 py-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+              <div>
+                <p className="font-semibold text-emerald-400">¡Entrenamiento completado!</p>
+                <p className="text-xs text-gray-500 mt-0.5">Ya registraste tu asistencia hoy</p>
+              </div>
+            </div>
+            {/* Desmarcar: pequeño y discreto para evitar accidentes */}
+            <button
+              onClick={handleToggleToday}
+              disabled={marking}
+              className="text-[10px] text-gray-600 hover:text-red-400 border border-gray-700 hover:border-red-500/30 px-2 py-1 rounded-lg transition-all flex-shrink-0"
+              title="Desmarcar asistencia de hoy"
+            >
+              {marking
+                ? <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin inline-block" />
+                : 'Desmarcar'
+              }
+            </button>
+          </div>
+        </div>
+      ) : (
+        <button
+          className="w-full py-4 rounded-2xl font-semibold text-lg flex items-center justify-center gap-3 btn-primary transition-all active:scale-95"
+          onClick={handleToggleToday}
+          disabled={marking}
+        >
+          {marking
+            ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             : <><Dumbbell className="w-5 h-5" /> Marcar asistencia de hoy</>
-        }
-      </button>
+          }
+        </button>
+      )}
 
       {/* Calendario visual */}
       <div className="card">
