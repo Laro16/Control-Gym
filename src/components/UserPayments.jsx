@@ -128,7 +128,7 @@ export function UserPayments({ payments, member, onRefresh }) {
                     ) : (
                       <><Camera className="w-3.5 h-3.5" /> Subir comprobante</>
                     )}
-                    <input type="file" accept="image/*" className="hidden" disabled={!!uploading}
+                    <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" className="hidden" disabled={!!uploading}
                       onChange={e => e.target.files?.[0] && handleUploadVoucher(p.id, e.target.files[0])} />
                   </label>
                 )}
@@ -384,7 +384,7 @@ Por favor revisar y aprobar ✅`
                 <Camera className="w-8 h-8 text-gray-500" />
                 <span className="text-sm text-gray-400">Foto del depósito o transferencia</span>
                 <span className="text-xs text-gray-600">Toca para abrir la cámara o galería</span>
-                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+                <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" className="hidden" onChange={handleFileChange} />
               </label>
             )}
           </div>
