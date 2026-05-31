@@ -1,223 +1,296 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState } from 'react'
 import {
-  Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X
+  Users, CreditCard, Check, X, Download,
+  AlertCircle, CheckCircle, Clock, Banknote, AlertTriangle,
+  TrendingUp, TrendingDown, MessageCircle,
+  ChevronDown, ChevronUp, Phone, Calendar, Layers
 } from 'lucide-react'
-import { playNotifSound } from '../App'
 import {
-  getMembers, getPayments, getPlans, getNotifications,
-  markAllNotificationsRead
+  supabase, adminCreateUser,
+  getMembers, getPayments, getMeasurements, getProgressPhotos,
+  createPayment, updatePayment, createMeasurement,
+  updateMember, deleteMember, getPlans, createPlan, updatePlan,
+  deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
+  createNotification, getMemberByProfile, getAttendance,
+  markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto
 } from '../supabase'
-import { formatDate, today } from '../utils/helpers'
-import { Spinner } from './shared'
-import { AdminOverview } from './AdminOverview'
-import { AdminMembers } from './AdminMembers'
-import { AdminPayments } from './AdminPayments'
-import { AdminPlans } from './AdminPlans'
-import { AdminReports } from './AdminReports'
+import {
+  formatDate, formatCurrency, getPaymentStatus, getMemberPaymentStatus, paymentStatusLabel,
+  approvalStatusLabel, measurementFields, getMeasurementDiff,
+  displayValue, getMeasurementComment, daysBetween,
+  generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
+  generateMasterExcel, today, addDays, calculateStreak
+} from '../utils/helpers'
+import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
+import { Modal, ConfirmModal, Spinner } from './shared'
 
-export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
-  const [tab, setTab]             = useState('overview')
-  const [members, setMembers]     = useState([])
-  const [payments, setPayments]   = useState([])
-  const [plans, setPlans]         = useState([])
-  const [notifications, setNotifications] = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [showNotifs, setShowNotifs] = useState(false)
-  const [showProfile, setShowProfile] = useState(false)
+// ── OVERVIEW ───────────────────────────────────────────────
+export function AdminOverview({ members, payments, profile, onNavigate }) {
+  const [filter, setFilter] = useState(null) // null | 'active' | 'pending' | 'overdue'
 
-  const loadData = useCallback(async () => {
-    setLoading(true)
-    const [m, p, pl, n] = await Promise.all([
-      getMembers(), getPayments(), getPlans(),
-      getNotifications(profile.id)
-    ])
-    setMembers(m.data || [])
-    setPayments(p.data || [])
-    setPlans(pl.data || [])
-    setNotifications(n.data || [])
-    setLoading(false)
-  }, [profile.id])
+  const active = members.filter(m => m.status === 'active').length
+  const pendingPayments = payments.filter(p => p.status === 'pending')
+  const overdueMembers = members.filter(m => getMemberPaymentStatus(m, payments) === 'overdue')
+  const totalMonth = payments
+    .filter(p => p.status === 'approved' && p.payment_date?.startsWith(new Date().toISOString().slice(0, 7)))
+    .reduce((a, p) => a + Number(p.amount), 0)
 
-  useEffect(() => { loadData() }, [loadData])
-
-  const unread = notifications.filter(n => !n.is_read).length
-
-  const tabs = [
-    { id: 'overview', label: 'Inicio',   icon: Home },
-    { id: 'members',  label: 'Miembros', icon: Users },
-    { id: 'payments', label: 'Pagos',    icon: CreditCard },
-    { id: 'plans',    label: 'Planes',   icon: Layers },
-    { id: 'reports',  label: 'Reportes', icon: FileText },
+  const stats = [
+    { id: 'active',  label: 'Miembros activos',        value: active,                  icon: Users,         color: 'text-brand-400',   bg: 'bg-brand-500/10',   clickable: true },
+    { id: 'pending', label: 'Pendientes de aprobación', value: pendingPayments.length,  icon: Clock,         color: 'text-yellow-400',  bg: 'bg-yellow-500/10',  clickable: true },
+    { id: 'overdue', label: 'Con cuota vencida',        value: overdueMembers.length,   icon: AlertTriangle, color: 'text-red-400',     bg: 'bg-red-500/10',     clickable: true },
+    { id: 'income',  label: 'Ingresos este mes',        value: formatCurrency(totalMonth), icon: CreditCard,  color: 'text-emerald-400', bg: 'bg-emerald-500/10', clickable: false },
   ]
 
-  const handleBell = () => {
-    setShowNotifs(p => !p)
-    setShowProfile(false)
-    if (!showNotifs && unread > 0) {
-      markAllNotificationsRead(profile.id)
-      playNotifSound()
-    }
-  }
+  // Miembros filtrados según stat activo
+  const filteredMembers = filter === 'active'  ? members.filter(m => m.status === 'active')
+    : filter === 'overdue' ? overdueMembers
+    : members
 
   return (
-    <div className="min-h-dvh bg-gray-950 flex flex-col">
+    <div className="space-y-6 animate-fade-in">
+      <div>
+        <h2 className="section-title">Bienvenido, {profile.full_name.split(' ')[0]} 👋</h2>
+        <p className="text-gray-500 text-sm mt-1">{formatDate(today())}</p>
+      </div>
 
-      {/* ── HEADER ───────────────────────────────────────── */}
-      <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-
-          {/* Logo */}
-          <div className="flex items-center gap-2">
-            <Dumbbell className="w-5 h-5 text-brand-500" />
-            <span className="font-display text-xl tracking-wide text-white">
-              {import.meta.env.VITE_GYM_NAME || 'GymApp'}
-            </span>
-            <span className="hidden sm:inline text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 px-2 py-0.5 rounded-full">
-              Admin
-            </span>
-          </div>
-
-          {/* Botones header */}
-          <div className="flex items-center gap-1">
-
-            {/* Modo claro/oscuro */}
-            <button
-              className="btn-ghost p-2"
-              onClick={onToggleDark}
-              title={darkMode ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'}
-            >
-              {darkMode
-                ? <Sun className="w-4 h-4 text-yellow-400" />
-                : <Moon className="w-4 h-4" />
-              }
-            </button>
-
-            {/* Notificaciones */}
-            <button className="relative btn-ghost p-2" onClick={handleBell}>
-              <Bell className="w-5 h-5" />
-              {unread > 0 && (
-                <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
-                  {unread > 9 ? '9+' : unread}
-                </span>
-              )}
-            </button>
-
-            {/* Avatar admin */}
-            <button
-              className="btn-ghost p-1"
-              onClick={() => { setShowProfile(p => !p); setShowNotifs(false) }}
-              title="Mi perfil"
-            >
-              {profile.avatar_url
-                ? <img src={profile.avatar_url} alt="avatar" className="w-7 h-7 rounded-full object-cover ring-2 ring-brand-500/30" />
-                : <div className="w-7 h-7 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
-                    <span className="text-xs font-bold text-brand-400">{profile.full_name?.[0]?.toUpperCase()}</span>
-                  </div>
-              }
-            </button>
-          </div>
-        </div>
-
-        {/* Dropdown notificaciones */}
-        {showNotifs && (
-          <div
-            className="absolute right-4 top-14 w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-96 overflow-y-auto"
-            onClick={e => e.stopPropagation()}
+      {/* Stats interactivos */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map(s => (
+          <button
+            key={s.id}
+            onClick={() => s.clickable && setFilter(filter === s.id ? null : s.id)}
+            className={`card text-left transition-all duration-200 ${s.clickable ? 'hover:border-gray-600 active:scale-95 cursor-pointer' : 'cursor-default'}
+              ${filter === s.id ? 'border-brand-500/50 ring-1 ring-brand-500/30' : ''}`}
           >
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="font-semibold text-sm text-gray-300">Notificaciones</h4>
-              <button
-                onClick={() => { markAllNotificationsRead(profile.id); setShowNotifs(false); loadData() }}
-                className="text-xs text-gray-500 hover:text-white"
-              >
-                Marcar leídas
-              </button>
+            <div className={`w-9 h-9 rounded-xl ${s.bg} flex items-center justify-center mb-3`}>
+              <s.icon className={`w-5 h-5 ${s.color}`} />
             </div>
-            {notifications.length === 0
-              ? <p className="text-gray-500 text-sm py-2">Sin notificaciones</p>
-              : notifications.slice(0, 20).map(n => (
-                <div key={n.id} className={`py-2.5 border-b border-gray-800 last:border-0 ${!n.is_read ? '' : 'opacity-40'}`}>
-                  <p className="text-sm font-medium text-white">{n.title}</p>
-                  <p className="text-xs text-gray-400">{n.message}</p>
-                  <p className="text-xs text-gray-600 mt-0.5">{formatDate(n.created_at)}</p>
+            <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+            <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
+            {s.clickable && <div className="text-[10px] text-gray-600 mt-1">Toca para filtrar</div>}
+          </button>
+        ))}
+      </div>
+
+      {/* Pagos pendientes — clicables para aprobar */}
+      {filter === 'pending' || pendingPayments.length > 0 ? (
+        <div>
+          <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+            <Clock className="w-4 h-4 text-yellow-400" />
+            Comprobantes pendientes ({pendingPayments.length})
+          </h3>
+          {pendingPayments.length === 0 ? (
+            <p className="text-gray-500 text-sm">Sin comprobantes pendientes</p>
+          ) : (
+            <div className="space-y-3">
+              {pendingPayments.map(p => (
+                <div key={p.id} className="card space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium text-white">{p.member?.profile?.full_name}</p>
+                      <p className="text-xs text-gray-400">
+                        {formatCurrency(p.amount)} · {p.notes || ''} · Vence {formatDate(p.due_date)}
+                      </p>
+                    </div>
+                    <span className="badge-yellow flex-shrink-0">Pendiente</span>
+                  </div>
+                  {p.voucher_url && (
+                    <div className="relative rounded-xl overflow-hidden bg-gray-800 group">
+                      <img src={p.voucher_url} alt="comprobante" className="w-full max-h-40 object-cover" />
+                      <a href={p.voucher_url} target="_blank" rel="noreferrer" download
+                        className="absolute top-2 right-2 bg-black/60 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Download className="w-3 h-3" /> Ver
+                      </a>
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <button className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold py-2 rounded-xl transition-all text-sm"
+                      onClick={async () => {
+                        await updatePayment(p.id, { status: 'approved', approved_at: new Date().toISOString() })
+                        await createNotification({ profile_id: p.member?.profile_id, type: 'payment_approved', title: 'Pago aprobado ✅', message: `Tu pago de ${formatCurrency(p.amount)} fue aprobado.` })
+                        onNavigate('refresh')
+                      }}>
+                      <Check className="w-4 h-4" /> Aprobar
+                    </button>
+                    <button className="flex-1 flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold py-2 rounded-xl transition-all text-sm"
+                      onClick={async () => {
+                        await updatePayment(p.id, { status: 'rejected' })
+                        onNavigate('refresh')
+                      }}>
+                      <X className="w-4 h-4" /> Rechazar
+                    </button>
+                  </div>
                 </div>
-              ))
-            }
-          </div>
-        )}
-
-        {/* Dropdown perfil admin */}
-        {showProfile && (
-          <div
-            className="absolute right-4 top-14 w-64 card border border-gray-700 shadow-2xl z-50 animate-slide-up"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
-              {profile.avatar_url
-                ? <img src={profile.avatar_url} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
-                : <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center">
-                    <span className="font-bold text-brand-400">{profile.full_name?.[0]?.toUpperCase()}</span>
-                  </div>
-              }
-              <div className="min-w-0">
-                <p className="font-semibold text-white text-sm truncate">{profile.full_name}</p>
-                <p className="text-xs text-gray-500 truncate">{profile.email}</p>
-                <span className="text-[10px] bg-brand-500/10 text-brand-400 px-1.5 py-0.5 rounded-full">Admin</span>
-              </div>
+              ))}
             </div>
-            <button
-              onClick={onLogout}
-              className="w-full flex items-center gap-2 text-red-400 hover:text-red-300 text-sm py-2 px-1 rounded-lg hover:bg-red-500/10 transition-all"
-            >
-              <LogOut className="w-4 h-4" /> Cerrar sesión
-            </button>
-          </div>
-        )}
-      </header>
-
-      {/* ── NAV TABS ─────────────────────────────────────── */}
-      <nav className="bg-gray-900/50 border-b border-gray-800 sticky top-[57px] z-30">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="flex gap-1 overflow-x-auto py-1 no-scrollbar">
-            {tabs.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all
-                  ${tab === t.id
-                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-                    : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}
-              >
-                <t.icon className="w-4 h-4" />
-                {t.label}
-              </button>
-            ))}
-          </div>
+          )}
         </div>
-      </nav>
+      ) : null}
 
-      {/* ── CONTENIDO ────────────────────────────────────── */}
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
-        {loading ? <Spinner /> : (
-          <>
-            {tab === 'overview' && (
-              <AdminOverview
-                members={members}
-                payments={payments}
-                onRefresh={loadData}
-                profile={profile}
-                onNavigate={a => { if (a === 'refresh') loadData(); else setTab(a) }}
-              />
-            )}
-            {tab === 'members'  && <AdminMembers  members={members} plans={plans} onRefresh={loadData} />}
-            {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} profile={profile} />}
-            {tab === 'plans'    && <AdminPlans    plans={plans} onRefresh={loadData} />}
-            {tab === 'reports'  && <AdminReports  members={members} payments={payments} />}
-          </>
+      {/* Lista de miembros filtrada — expandible */}
+      <MemberStatusList members={filteredMembers} payments={payments} filter={filter} setFilter={setFilter} />
+    </div>
+  )
+}
+
+// ── LISTA EXPANDIBLE DE MIEMBROS ───────────────────────────
+function MemberStatusList({ members, payments, filter, setFilter }) {
+  const [expanded, setExpanded] = useState(null)
+
+  const toggle = (id) => setExpanded(prev => prev === id ? null : id)
+
+  return (
+    <div>
+      <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
+        <AlertCircle className="w-4 h-4 text-brand-500" />
+        {filter === 'active' ? 'Miembros activos'
+          : filter === 'overdue' ? 'Con cuota vencida'
+          : filter === 'pending' ? 'Pendientes'
+          : 'Estado de cuotas'}
+        <span className="text-xs text-gray-600 font-normal">({members.length})</span>
+        {filter && (
+          <button onClick={() => setFilter(null)} className="ml-auto text-xs text-gray-500 hover:text-white">
+            Ver todos
+          </button>
         )}
-      </main>
+      </h3>
 
+      <div className="space-y-2">
+        {members.map(m => {
+          const memberPayments = payments.filter(p => p.member_id === m.id && p.status !== 'rejected')
+          const lastPayment    = memberPayments[0]
+          const approvedPays  = memberPayments.filter(p => p.status === 'approved')
+          const st             = getMemberPaymentStatus(m, payments)
+          const stLabel        = paymentStatusLabel[st]
+          const isOpen         = expanded === m.id
+
+          return (
+            <div key={m.id} className={`card transition-all duration-200 ${isOpen ? 'border-gray-700' : ''}`}>
+
+              {/* ── FILA PRINCIPAL (siempre visible) ── */}
+              <button
+                className="w-full flex items-center gap-3"
+                onClick={() => toggle(m.id)}
+              >
+                {/* Avatar */}
+                <div className={`w-9 h-9 rounded-full flex-shrink-0 ${stLabel?.bg || 'bg-gray-800'} flex items-center justify-center`}>
+                  {m.profile?.avatar_url
+                    ? <img src={m.profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+                    : <span className="text-xs font-bold text-white">{m.profile?.full_name?.[0]?.toUpperCase()}</span>
+                  }
+                </div>
+
+                {/* Nombre y subtítulo */}
+                <div className="flex-1 min-w-0 text-left">
+                  <p className="text-sm font-semibold text-white truncate">{m.profile?.full_name}</p>
+                  <p className="text-xs text-gray-500 truncate">
+                    {lastPayment
+                      ? `Vence ${formatDate(lastPayment.due_date)}`
+                      : `Sin pagos · Desde ${formatDate(m.start_date)}`
+                    }
+                  </p>
+                </div>
+
+                {/* Badge estado */}
+                <span className={`${stLabel?.cls} flex-shrink-0`}>{stLabel?.text}</span>
+
+                {/* Chevron */}
+                {isOpen
+                  ? <ChevronUp className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                  : <ChevronDown className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                }
+              </button>
+
+              {/* ── DETALLE EXPANDIDO ── */}
+              {isOpen && (
+                <div className="mt-3 pt-3 border-t border-gray-800 space-y-3 animate-fade-in">
+
+                  {/* Datos personales */}
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { icon: Calendar, label: 'Miembro desde', value: formatDate(m.start_date) },
+                      { icon: Layers,   label: 'Plan',          value: m.plan?.name || '—' },
+                      { icon: Phone,    label: 'Teléfono',      value: m.profile?.phone || '—' },
+                      { icon: Calendar, label: 'Vencimiento',   value: lastPayment ? formatDate(lastPayment.due_date) : '—' },
+                    ].map(r => (
+                      <div key={r.label} className="bg-gray-800/40 rounded-xl px-3 py-2">
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          <r.icon className="w-3 h-3 text-gray-500" />
+                          <p className="text-[10px] text-gray-500">{r.label}</p>
+                        </div>
+                        <p className="text-xs font-semibold text-white truncate">{r.value}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Historial de pagos */}
+                  {memberPayments.length > 0 && (
+                    <div>
+                      <p className="text-[10px] font-semibold text-gray-500 mb-1.5 uppercase tracking-wide">
+                        Últimos pagos
+                      </p>
+                      <div className="space-y-1.5">
+                        {memberPayments.slice(0, 4).map(p => {
+                          const pStatus = approvalStatusLabel?.[p.status]
+                          return (
+                            <div key={p.id} className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-2">
+                                <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                                  p.status === 'approved' ? 'bg-emerald-400'
+                                  : p.status === 'pending' ? 'bg-yellow-400'
+                                  : 'bg-red-400'
+                                }`} />
+                                <span className="text-gray-400">{p.notes || formatDate(p.due_date)}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className="text-gray-300 font-medium">{formatCurrency(p.amount)}</span>
+                                <span className={pStatus?.cls || 'badge-gray'}>{pStatus?.text}</span>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Acciones rápidas */}
+                  <div className="flex gap-2 pt-1">
+                    {m.profile?.phone && (
+                      <a
+                        href={`https://wa.me/${m.profile.phone.replace(/[^0-9]/g, '')}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-all"
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                      </a>
+                    )}
+                    {(st === 'overdue' || st === 'due_soon') && (
+                      <button
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-500/10 text-brand-400 text-xs font-medium hover:bg-brand-500/20 transition-all"
+                        onClick={() => {
+                          const msg = `Hola ${m.profile?.full_name?.split(' ')[0]}, te recordamos que tu cuota ${st === 'overdue' ? 'está vencida' : 'vence pronto'}. Por favor realiza tu pago. ¡Gracias! 🏋️`
+                          const num = (m.profile?.phone || '').replace(/[^0-9]/g, '')
+                          if (num) window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank')
+                          else alert('Este miembro no tiene teléfono registrado')
+                        }}
+                      >
+                        <MessageCircle className="w-3.5 h-3.5" /> Recordatorio
+                      </button>
+                    )}
+                  </div>
+
+                </div>
+              )}
+            </div>
+          )
+        })}
+
+        {members.length === 0 && (
+          <p className="text-gray-500 text-sm text-center py-6">Sin miembros en esta categoría</p>
+        )}
+      </div>
     </div>
   )
 }
