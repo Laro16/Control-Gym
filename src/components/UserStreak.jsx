@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Flame, Trophy, CheckCircle, Dumbbell, Star, Zap, Shield, Crown } from 'lucide-react'
+import { Flame, Trophy, CheckCircle, Dumbbell, Star, Zap, Shield, Crown, Lock, CreditCard } from 'lucide-react'
 import { playAchievementSound } from '../App'
 import {
   supabase, markAttendance, removeAttendance, createNotification
 } from '../supabase'
-import { calculateStreak, today } from '../utils/helpers'
+import { calculateStreak, today, getMemberPaymentStatus, daysBetween } from '../utils/helpers'
 
 // ── LOGROS POR GÉNERO ─────────────────────────────────────
 const getAchievements = (gender) => {
@@ -161,7 +161,7 @@ function StreakWarning({ streak, markedToday }) {
 }
 
 // ── COMPONENTE PRINCIPAL ───────────────────────────────────
-export function UserStreak({ attendance, member, onRefresh, profile }) {
+export function UserStreak({ attendance, member, payments, onRefresh, profile }) {
   const [marking, setMarking]           = useState(false)
   const [celebration, setCelebration]   = useState(null) // achievement objeto
 
@@ -177,6 +177,22 @@ export function UserStreak({ attendance, member, onRefresh, profile }) {
 
   const unlocked       = ACHIEVEMENTS.filter(a => streak >= a.days)
   const nextAchievement = ACHIEVEMENTS.find(a => streak < a.days)
+
+  // Bloqueo por cuota vencida mas de 2 dias
+  const payStatus = member ? getMemberPaymentStatus(member, payments || []) : null
+  const isPaymentBlocked = (() => {
+    if (!member || payStatus !== 'overdue') return false
+    const approved = (payments || []).filter(
+      p => p.member_id === member.id && p.status === 'approved'
+    )
+    if (!approved.length) {
+      const planDays  = member?.plan?.duration_days || 30
+      const d = new Date(member.start_date + 'T12:00:00')
+      d.setDate(d.getDate() + planDays)
+      return daysBetween(d.toISOString().split('T')[0], today()) > 2
+    }
+    return daysBetween(approved[0].due_date, today()) > 2
+  })()
 
   const handleToggleToday = async () => {
     if (!member) return
@@ -308,7 +324,22 @@ export function UserStreak({ attendance, member, onRefresh, profile }) {
       </div>
 
       {/* Botón marcar / estado */}
-      {markedToday ? (
+      {isPaymentBlocked && !markedToday ? (
+        <div className="rounded-2xl bg-red-500/10 border-2 border-red-500/20 px-5 py-4 space-y-3">
+          <div className="flex items-center gap-3">
+            <Lock className="w-6 h-6 text-red-400 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-red-400">Racha bloqueada</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Tu cuota lleva más de 2 días vencida. Regulariza tu pago para continuar.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center justify-center gap-2 bg-red-500/10 text-red-400 text-xs py-2 rounded-xl border border-red-500/20">
+            <CreditCard className="w-3.5 h-3.5" /> Ponte al día para desbloquear tu racha
+          </div>
+        </div>
+      ) : markedToday ? (
         <div className="rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 px-5 py-4">
           <div className="flex items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -318,7 +349,6 @@ export function UserStreak({ attendance, member, onRefresh, profile }) {
                 <p className="text-xs text-gray-500 mt-0.5">Ya registraste tu asistencia hoy</p>
               </div>
             </div>
-            {/* Desmarcar: pequeño y discreto para evitar accidentes */}
             <button
               onClick={handleToggleToday}
               disabled={marking}
