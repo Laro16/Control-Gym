@@ -96,97 +96,139 @@
   }
 }
 
-/* ── MODO CLARO ──────────────────────────────────────────── */
-.light body {
-  @apply bg-gray-50 text-gray-900;
-}
-.light .card,
-.light .card-hover {
-  @apply bg-white border-gray-200 shadow-sm;
-}
-.light .card-hover:hover {
-  @apply border-brand-400/50;
-}
-.light .input {
-  @apply bg-gray-100 border-gray-300 text-gray-900 placeholder-gray-400;
-}
-.light .btn-secondary {
-  @apply bg-gray-100 hover:bg-gray-200 text-gray-800;
-}
-.light .btn-ghost {
-  @apply hover:bg-gray-100 text-gray-600 hover:text-gray-900;
-}
-.light header {
-  @apply bg-white border-gray-200;
-}
-.light nav {
-  @apply bg-gray-50/80 border-gray-200;
-}
-.light .section-title {
-  @apply text-gray-900;
-}
-.light .label {
-  @apply text-gray-600;
-}
-.light .modal-box {
-  @apply bg-white border-gray-200;
-}
-.light .modal-overlay {
-  @apply bg-black/50;
-}
-.light select option {
-  @apply bg-white text-gray-900;
-}
-
-/* ── MODO CLARO ──────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════
+   MODO CLARO — Diseño limpio y profesional
+   ═══════════════════════════════════════════════════════════ */
 .light-mode {
-  --bg-base:   #f1f5f9;
-  --bg-card:   #ffffff;
-  --bg-card2:  #f8fafc;
-  --border:    #e2e8f0;
-  --text-main: #0f172a;
-  --text-muted:#64748b;
+  color-scheme: light;
 }
 
+/* ── BASE ─────────────────────────────────────────────────── */
 .light-mode body {
-  background-color: var(--bg-base);
-  color: var(--text-main);
+  background-color: #f0f2f5 !important;
+  color: #111827 !important;
 }
 
+/* ── HEADER — fondo blanco con sombra sutil ────────────────── */
+.light-mode header {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+}
+
+/* ── NAV / BARRA DE TABS ───────────────────────────────────── */
+.light-mode nav {
+  background-color: #f9fafb !important;
+  border-color: #e5e7eb !important;
+}
+
+/* ── FONDO PRINCIPAL ───────────────────────────────────────── */
+.light-mode .bg-gray-950,
+.light-mode .min-h-dvh {
+  background-color: #f0f2f5 !important;
+}
+
+/* ── CARDS ─────────────────────────────────────────────────── */
 .light-mode .card,
 .light-mode .card-hover {
-  background-color: var(--bg-card);
-  border-color: var(--border);
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
 }
-
 .light-mode .card-hover:hover {
-  border-color: #f97316;
+  border-color: #f97316 !important;
+  box-shadow: 0 4px 12px rgba(249,115,22,0.08) !important;
 }
 
-.light-mode .bg-gray-950 { background-color: var(--bg-base) !important; }
-.light-mode .bg-gray-900 { background-color: var(--bg-card) !important; }
-.light-mode .bg-gray-800 { background-color: #e2e8f0 !important; }
-.light-mode .bg-gray-800\/50 { background-color: #f1f5f9 !important; }
-.light-mode .border-gray-800 { border-color: var(--border) !important; }
-.light-mode .border-gray-700 { border-color: #cbd5e1 !important; }
-.light-mode .text-gray-100 { color: var(--text-main) !important; }
-.light-mode .text-gray-300 { color: #334155 !important; }
-.light-mode .text-gray-400 { color: var(--text-muted) !important; }
-.light-mode .text-gray-500 { color: #94a3b8 !important; }
-.light-mode .text-white    { color: var(--text-main) !important; }
+/* ── TEXTOS ────────────────────────────────────────────────── */
+.light-mode .text-white    { color: #111827 !important; }
+.light-mode .text-gray-100 { color: #1f2937 !important; }
+.light-mode .text-gray-300 { color: #374151 !important; }
+.light-mode .text-gray-400 { color: #6b7280 !important; }
+.light-mode .text-gray-500 { color: #9ca3af !important; }
+.light-mode .text-gray-600 { color: #d1d5db !important; }
+
+/* ── FONDOS GRISES ─────────────────────────────────────────── */
+.light-mode .bg-gray-900   { background-color: #ffffff !important; }
+.light-mode .bg-gray-800   { background-color: #f3f4f6 !important; }
+.light-mode .bg-gray-700   { background-color: #e5e7eb !important; }
+
+/* Fondos con opacidad */
+.light-mode [class*="bg-gray-800\/"] { background-color: #f3f4f6 !important; }
+.light-mode [class*="bg-gray-900\/"] { background-color: #f9fafb !important; }
+
+/* ── BORDES ─────────────────────────────────────────────────── */
+.light-mode .border-gray-800 { border-color: #e5e7eb !important; }
+.light-mode .border-gray-700 { border-color: #d1d5db !important; }
+.light-mode [class*="border-gray-800\/"] { border-color: #e5e7eb !important; }
+
+/* ── INPUTS ─────────────────────────────────────────────────── */
 .light-mode .input {
-  background-color: #f1f5f9 !important;
-  border-color: #cbd5e1 !important;
-  color: var(--text-main) !important;
+  background-color: #f9fafb !important;
+  border-color: #d1d5db !important;
+  color: #111827 !important;
 }
+.light-mode .input:focus {
+  border-color: #f97316 !important;
+  background-color: #ffffff !important;
+}
+.light-mode .input::placeholder { color: #9ca3af !important; }
+
+/* ── BOTONES ─────────────────────────────────────────────────── */
 .light-mode .btn-secondary {
-  background-color: #e2e8f0 !important;
-  color: #334155 !important;
+  background-color: #f3f4f6 !important;
+  color: #374151 !important;
+  border-color: #d1d5db !important;
+}
+.light-mode .btn-secondary:hover {
+  background-color: #e5e7eb !important;
 }
 .light-mode .btn-ghost {
-  color: #64748b !important;
+  color: #6b7280 !important;
 }
 .light-mode .btn-ghost:hover {
-  background-color: #e2e8f0 !important;
-  color: var(--text-main) !important;
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+}
+
+/* ── MODALES ─────────────────────────────────────────────────── */
+.light-mode .modal-box {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.15) !important;
+}
+.light-mode .modal-overlay {
+  background-color: rgba(0,0,0,0.4) !important;
+}
+
+/* ── SELECTS ─────────────────────────────────────────────────── */
+.light-mode select option {
+  background-color: #ffffff;
+  color: #111827;
+}
+
+/* ── SCROLLBAR ───────────────────────────────────────────────── */
+.light-mode ::-webkit-scrollbar-track { background: #f3f4f6; }
+.light-mode ::-webkit-scrollbar-thumb { background: #d1d5db; }
+
+/* ── GRADIENTES DE BIENVENIDA ────────────────────────────────── */
+.light-mode .bg-gradient-to-br {
+  background: linear-gradient(135deg, rgba(249,115,22,0.08), rgba(234,108,16,0.04)) !important;
+}
+
+/* ── BADGES — mantener colores de estado ────────────────────── */
+.light-mode .badge-green  { background-color: #dcfce7 !important; color: #16a34a !important; }
+.light-mode .badge-red    { background-color: #fee2e2 !important; color: #dc2626 !important; }
+.light-mode .badge-yellow { background-color: #fef9c3 !important; color: #ca8a04 !important; }
+.light-mode .badge-gray   { background-color: #f3f4f6 !important; color: #6b7280 !important; }
+
+/* ── FONDOS CON COLOR DE ESTADO (emerald, red, yellow, brand) ── */
+.light-mode [class*="bg-emerald-500\/"] { background-color: rgba(16,185,129,0.1) !important; }
+.light-mode [class*="bg-red-500\/"]     { background-color: rgba(239,68,68,0.08) !important; }
+.light-mode [class*="bg-yellow-500\/"]  { background-color: rgba(234,179,8,0.1) !important; }
+.light-mode [class*="bg-brand-500\/"]   { background-color: rgba(249,115,22,0.08) !important; }
+
+/* ── TABS ACTIVOS ────────────────────────────────────────────── */
+.light-mode [class*="bg-brand-500\/10"] {
+  background-color: rgba(249,115,22,0.1) !important;
 }
