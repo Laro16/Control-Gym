@@ -41,11 +41,13 @@ export const getPaymentStatus = (dueDate) => {
 }
 
 // Calcula el estado de un miembro considerando pagos Y fecha de inicio
-// Lógica:
-//   - Sin pagos + más de 30 días desde inicio → vencida
-//   - Sin pagos + menos de 30 días desde inicio → nuevo (primer mes corriendo)
-//   - Con último pago aprobado → estado por due_date
-//   - Con pago pendiente → pendiente de aprobación
+// Lógica sin pagos:
+//   - Calcula due_date real = start_date + duración del plan (default 30 días)
+//   - Usa getPaymentStatus(due_date) → puede ser 'due_soon', 'overdue' o 'new_member'
+// Ejemplo: inicio 1-6-2026, plan 30 días → due 1-7-2026
+//   - 1-6 al 25-6  → 'new_member'  (más de 5 días para vencer)
+//   - 26-6 al 1-7  → 'due_soon'    (5 días o menos para vencer)
+//   - 2-7 en adelante → 'overdue'  (vencida)
 export const getMemberPaymentStatus = (member, payments) => {
   const memberPayments = (payments || []).filter(
     p => p.member_id === member.id && p.status !== 'rejected'
@@ -53,12 +55,21 @@ export const getMemberPaymentStatus = (member, payments) => {
 
   if (!memberPayments.length) {
     if (!member.start_date) return 'no_payment'
-    const days = daysBetween(member.start_date, today())
-    // Primer mes gratis o pendiente de registrar pago
-    return days > 30 ? 'overdue' : 'new_member'
+
+    // Calcular fecha de vencimiento esperada según el plan
+    const planDays = member.plan?.duration_days || 30
+    const startDate = new Date(member.start_date + 'T12:00:00')
+    startDate.setDate(startDate.getDate() + planDays)
+    const expectedDueDate = startDate.toISOString().split('T')[0]
+
+    const diff = daysBetween(today(), expectedDueDate)
+
+    if (diff < 0)  return 'overdue'    // ya venció
+    if (diff <= 5) return 'due_soon'   // próxima a vencer
+    return 'new_member'                // aún tiene tiempo
   }
 
-  // Tiene pagos — revisar el más reciente
+  // Tiene pagos — revisar el más reciente no rechazado
   const last = memberPayments[0]
   if (last.status === 'pending') return 'pending_approval'
   return getPaymentStatus(last.due_date)
