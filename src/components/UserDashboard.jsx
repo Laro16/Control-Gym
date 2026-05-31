@@ -30,6 +30,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   const [plans, setPlans] = useState([])
   const [loading, setLoading] = useState(true)
   const [showNotifs, setShowNotifs] = useState(false)
+  const [gymLogo, setGymLogo]         = useState(null)
   const [showAccount, setShowAccount] = useState(false)
   const prevNotifsCount = useRef(0)
 
@@ -58,6 +59,10 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       setAttendance(att.data || [])
     }
     setLoading(false)
+
+    // Logo del gimnasio
+    const { data: gymData } = await supabase.from('gyms').select('logo_url').limit(1).single()
+    if (gymData?.logo_url) setGymLogo(gymData.logo_url)
   }, [profile.id])
 
   useEffect(() => { loadData() }, [loadData])
@@ -82,10 +87,16 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
         <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Dumbbell className="w-5 h-5 text-brand-500" />
-            <span className="font-display text-xl tracking-wide text-white">
-              {import.meta.env.VITE_GYM_NAME || 'GymApp'}
-            </span>
+            {gymLogo ? (
+              <img src={gymLogo} alt="logo" className="h-8 w-auto object-contain max-w-[120px]" />
+            ) : (
+              <>
+                <Dumbbell className="w-5 h-5 text-brand-500" />
+                <span className="font-display text-xl tracking-wide text-white">
+                  {import.meta.env.VITE_GYM_NAME || 'GymApp'}
+                </span>
+              </>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {/* Modo claro/oscuro */}
