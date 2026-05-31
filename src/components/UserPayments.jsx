@@ -180,18 +180,27 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
   const planPrice = member?.plan?.price || 0
   const planName  = member?.plan?.name  || 'Sin plan'
 
-  // Generar los 12 meses del año seleccionado
-  const currentYear = new Date().getFullYear() + yearOffset
+  // Mes de inicio del miembro — no puede pagar meses anteriores a su inscripcion
+  const startKey  = member?.start_date?.slice(0, 7) || '2000-01'
+  const startYear = parseInt(startKey.slice(0, 4))
+  const thisYear  = new Date().getFullYear()
+
+  // El año offset solo puede ser desde el año de inicio en adelante
+  // y máximo el año siguiente al actual
+  const baseYear   = Math.max(startYear, thisYear)
+  const currentYear = baseYear + yearOffset
+
   const allMonths = Array.from({ length: 12 }, (_, i) => {
-    const d    = new Date(currentYear, i, 1)
-    const key  = `${currentYear}-${String(i + 1).padStart(2, '0')}`
+    const d     = new Date(currentYear, i, 1)
+    const key   = `${currentYear}-${String(i + 1).padStart(2, '0')}`
     const label = d.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })
-    const due  = new Date(currentYear, i + 1, 0).toISOString().slice(0, 10)
+    const due   = new Date(currentYear, i + 1, 0).toISOString().slice(0, 10)
     const isPaid = existingPayments.some(p =>
       p.due_date?.slice(0, 7) === key && p.status !== 'rejected'
     )
-    return { key, label, due, isPaid }
-  })
+    const isBeforeStart = key < startKey
+    return { key, label, due, isPaid, isBeforeStart }
+  }).filter(m => !m.isBeforeStart)
 
   const toggleMonth = (key) => {
     const month = allMonths.find(m => m.key === key)
@@ -289,7 +298,7 @@ Por favor revisar y aprobar ✅`
             <p className="font-semibold text-white">{planName} — {formatCurrency(planPrice)}/mes</p>
           </div>
 
-          {/* Selector de año */}
+          {/* Selector de año — solo mostrar año de inicio en adelante */}
           <div className="flex items-center justify-between">
             <label className="label mb-0">¿Qué cuotas deseas pagar?</label>
             <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-1 py-0.5">
@@ -297,12 +306,12 @@ Por favor revisar y aprobar ✅`
                 onClick={() => { setYearOffset(0); setSelectedMonths([]) }}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all
                   ${yearOffset === 0 ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'}`}
-              >{new Date().getFullYear()}</button>
+              >{baseYear}</button>
               <button
                 onClick={() => { setYearOffset(1); setSelectedMonths([]) }}
                 className={`px-3 py-1 rounded-md text-xs font-medium transition-all
                   ${yearOffset === 1 ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'}`}
-              >{new Date().getFullYear() + 1}</button>
+              >{baseYear + 1}</button>
             </div>
           </div>
 
