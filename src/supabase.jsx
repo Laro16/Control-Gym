@@ -43,19 +43,61 @@ export const getProfile = async (userId) => {
 }
 
 // ── CREAR USUARIO SIN AFECTAR SESIÓN DEL ADMIN ────────────
+// Si el email ya existia (usuario eliminado), lo reactiva con nueva contraseña
 export const adminCreateUser = async (email, password, fullName) => {
   if (!supabaseAdmin) {
     return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
   }
 
+  // Intento 1: crear normalmente
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
-    email_confirm: true,           // ← confirma el email automáticamente, sin email
+    email_confirm: true,
     user_metadata: { full_name: fullName, role: 'user' }
   })
 
-  return { data, error }
+  if (!error) return { data, error: null }
+
+  // Si el error es "ya registrado", buscar y reactivar el usuario
+  const isAlreadyRegistered =
+    error.message?.toLowerCase().includes('already been registered') ||
+    error.message?.toLowerCase().includes('already registered') ||
+    error.message?.toLowerCase().includes('already exists')
+
+  if (!isAlreadyRegistered) return { data, error }
+
+  // Buscar el usuario por email en Auth
+  const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
+  if (listError) return { data: null, error: listError }
+
+  const existingUser = listData?.users?.find(
+    u => u.email?.toLowerCase() === email.toLowerCase()
+  )
+  if (!existingUser) return { data: null, error }
+
+  // Reactivar: nueva contrasena, desbanear, actualizar metadatos
+  const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+    existingUser.id,
+    {
+      password,
+      email_confirm: true,
+      user_metadata: { full_name: fullName, role: 'user' },
+      ban_duration: 'none',
+    }
+  )
+
+  if (updateError) return { data: null, error: updateError }
+
+  // Recrear perfil por si quedo huerfano
+  await supabase.from('profiles').upsert({
+    id: existingUser.id,
+    email,
+    full_name: fullName,
+    role: 'user'
+  })
+
+  return { data: { user: existingUser }, error: null }
 }
 
 // ── MIEMBROS ───────────────────────────────────────────────
@@ -94,11 +136,41 @@ export const updateMember = async (id, updates) => {
   return { data, error }
 }
 
-export const deleteMember = async (id) => {
+// Desactivar miembro (reversible — solo cambia status)
+export const deactivateMember = async (id) => {
   const { error } = await supabase
     .from('members')
     .update({ status: 'inactive' })
     .eq('id', id)
+  return { error }
+}
+
+// Reactivar miembro
+export const reactivateMember = async (id) => {
+  const { error } = await supabase
+    .from('members')
+    .update({ status: 'active' })
+    .eq('id', id)
+  return { error }
+}
+
+// Eliminar miembro COMPLETAMENTE (borra de Auth + todas sus tablas)
+// Requiere VITE_SUPABASE_SERVICE_KEY configurada en Vercel
+export const deleteMemberPermanently = async (memberId, profileId) => {
+  if (!supabaseAdmin) {
+    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno de Vercel.' } }
+  }
+
+  // 1) Eliminar datos relacionados en orden (por foreign keys)
+  await supabase.from('attendance').delete().eq('member_id', memberId)
+  await supabase.from('measurements').delete().eq('member_id', memberId)
+  await supabase.from('progress_photos').delete().eq('member_id', memberId)
+  await supabase.from('payments').delete().eq('member_id', memberId)
+  await supabase.from('members').delete().eq('id', memberId)
+  await supabase.from('notifications').delete().eq('profile_id', profileId)
+
+  // 2) Eliminar de Supabase Auth (requiere service role)
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(profileId)
   return { error }
 }
 
