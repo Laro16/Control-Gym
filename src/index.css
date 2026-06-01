@@ -276,8 +276,7 @@
 .light-mode [class*="border-yellow-500/"]  { border-color: rgba(234,179,8,0.3) !important; }
 .light-mode [class*="border-brand-500/"]   { border-color: rgba(249,115,22,0.25) !important; }
 
-/* ── DROPDOWS (notificaciones, perfil) ───────────────────── */
-.light-mode .card.border.border-gray-700,
+/* ── DROPDOWNS (notificaciones, perfil) ──────────────────── */
 .light-mode [class*="border-gray-700"] {
   border-color: #e2e8f0 !important;
 }
