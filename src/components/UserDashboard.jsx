@@ -149,13 +149,13 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       </header>
 
       {/* BOTTOM NAV (mobile) / TOP NAV (desktop) */}
-      <nav className="bg-gray-900/50 border-b border-gray-800 sticky top-[57px] z-30">
+      <nav className="lm-nav border-b border-gray-800 sticky top-[57px] z-30">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex gap-1 py-1 overflow-x-auto no-scrollbar">
             {tabs.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all
-                  ${tab === t.id ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-gray-400 hover:text-white hover:bg-gray-800'}`}>
+                  ${tab === t.id ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-gray-400 hover:text-white hover:bg-gray-800 lm-tab-inactive'}`}>
                 <t.icon className="w-4 h-4" />{t.label}
               </button>
             ))}
