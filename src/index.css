@@ -97,138 +97,207 @@
 }
 
 /* ═══════════════════════════════════════════════════════════
-   MODO CLARO — Diseño limpio y profesional
+   MODO CLARO — Rediseño completo
    ═══════════════════════════════════════════════════════════ */
-.light-mode {
-  color-scheme: light;
-}
 
-/* ── BASE ─────────────────────────────────────────────────── */
+/* Paleta claro:
+   Fondo base:      #eef0f4  (gris azulado muy suave)
+   Header/Nav:      #ffffff  con sombra
+   Cards:           #ffffff  con borde sutil
+   Texto principal: #0f172a
+   Texto muted:     #64748b
+   Bordes:          #e2e8f0
+*/
+
+.light-mode { color-scheme: light; }
+
+/* ── BASE ────────────────────────────────────────────────── */
 .light-mode body {
-  background-color: #f0f2f5 !important;
-  color: #111827 !important;
+  background-color: #eef0f4 !important;
+  color: #0f172a !important;
 }
 
-/* ── HEADER — fondo blanco con sombra sutil ────────────────── */
+/* ── HEADER ──────────────────────────────────────────────── */
 .light-mode header {
   background-color: #ffffff !important;
-  border-color: #e5e7eb !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.07), 0 0 0 1px rgba(0,0,0,0.03) !important;
 }
 
-/* ── NAV / BARRA DE TABS ───────────────────────────────────── */
-.light-mode nav {
-  background-color: #f9fafb !important;
-  border-color: #e5e7eb !important;
+/* ── NAV (barra de pestañas) ─────────────────────────────── */
+.light-mode nav,
+.light-mode .lm-nav {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
 }
 
-/* ── FONDO PRINCIPAL ───────────────────────────────────────── */
-.light-mode .bg-gray-950,
-.light-mode .min-h-dvh {
-  background-color: #f0f2f5 !important;
+/* ── PESTAÑAS INACTIVAS ──────────────────────────────────── */
+.light-mode .lm-tab-inactive {
+  color: #64748b !important;
+}
+.light-mode .lm-tab-inactive:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 
-/* ── CARDS ─────────────────────────────────────────────────── */
+/* ── PESTAÑA ACTIVA (brand) — ya se ve bien, solo ajustar texto */
+.light-mode .text-brand-400 { color: #ea6c10 !important; }
+
+/* ── MAIN / CONTENIDO ────────────────────────────────────── */
+.light-mode main {
+  background-color: #eef0f4 !important;
+}
+.light-mode .bg-gray-950 { background-color: #eef0f4 !important; }
+.light-mode .min-h-dvh   { background-color: #eef0f4 !important; }
+
+/* ── CARDS ───────────────────────────────────────────────── */
 .light-mode .card,
 .light-mode .card-hover {
   background-color: #ffffff !important;
-  border-color: #e5e7eb !important;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06) !important;
 }
 .light-mode .card-hover:hover {
   border-color: #f97316 !important;
-  box-shadow: 0 4px 12px rgba(249,115,22,0.08) !important;
+  box-shadow: 0 4px 16px rgba(249,115,22,0.10) !important;
 }
 
-/* ── TEXTOS ────────────────────────────────────────────────── */
-.light-mode .text-white    { color: #111827 !important; }
-.light-mode .text-gray-100 { color: #1f2937 !important; }
-.light-mode .text-gray-300 { color: #374151 !important; }
-.light-mode .text-gray-400 { color: #6b7280 !important; }
-.light-mode .text-gray-500 { color: #9ca3af !important; }
-.light-mode .text-gray-600 { color: #d1d5db !important; }
+/* ── FONDOS bg-gray ──────────────────────────────────────── */
+.light-mode .bg-gray-900  { background-color: #ffffff !important; }
+.light-mode .bg-gray-800  { background-color: #f1f5f9 !important; }
+.light-mode .bg-gray-700  { background-color: #e2e8f0 !important; }
+.light-mode .bg-gray-600  { background-color: #cbd5e1 !important; }
 
-/* ── FONDOS GRISES ─────────────────────────────────────────── */
-.light-mode .bg-gray-900   { background-color: #ffffff !important; }
-.light-mode .bg-gray-800   { background-color: #f3f4f6 !important; }
-.light-mode .bg-gray-700   { background-color: #e5e7eb !important; }
+/* Variantes con opacidad — usar attr selector */
+.light-mode [class*="bg-gray-900/"]  { background-color: #f8fafc !important; }
+.light-mode [class*="bg-gray-800/"]  { background-color: #f1f5f9 !important; }
 
-/* Fondos con opacidad */
-.light-mode [class*="bg-gray-800\/"] { background-color: #f3f4f6 !important; }
-.light-mode [class*="bg-gray-900\/"] { background-color: #f9fafb !important; }
+/* ── BORDES ──────────────────────────────────────────────── */
+.light-mode .border-gray-800 { border-color: #e2e8f0 !important; }
+.light-mode .border-gray-700 { border-color: #cbd5e1 !important; }
+.light-mode [class*="border-gray-800/"] { border-color: #e2e8f0 !important; }
+.light-mode [class*="border-gray-700/"] { border-color: #cbd5e1 !important; }
 
-/* ── BORDES ─────────────────────────────────────────────────── */
-.light-mode .border-gray-800 { border-color: #e5e7eb !important; }
-.light-mode .border-gray-700 { border-color: #d1d5db !important; }
-.light-mode [class*="border-gray-800\/"] { border-color: #e5e7eb !important; }
+/* ── TEXTOS ──────────────────────────────────────────────── */
+.light-mode .text-white    { color: #0f172a !important; }
+.light-mode .text-gray-100 { color: #1e293b !important; }
+.light-mode .text-gray-200 { color: #334155 !important; }
+.light-mode .text-gray-300 { color: #475569 !important; }
+.light-mode .text-gray-400 { color: #64748b !important; }
+.light-mode .text-gray-500 { color: #94a3b8 !important; }
+.light-mode .text-gray-600 { color: #cbd5e1 !important; }
+.light-mode .text-gray-700 { color: #e2e8f0 !important; }
 
-/* ── INPUTS ─────────────────────────────────────────────────── */
+/* ── INPUTS ──────────────────────────────────────────────── */
 .light-mode .input {
-  background-color: #f9fafb !important;
-  border-color: #d1d5db !important;
-  color: #111827 !important;
+  background-color: #f8fafc !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
 }
 .light-mode .input:focus {
-  border-color: #f97316 !important;
   background-color: #ffffff !important;
+  border-color: #f97316 !important;
+  box-shadow: 0 0 0 3px rgba(249,115,22,0.12) !important;
 }
-.light-mode .input::placeholder { color: #9ca3af !important; }
+.light-mode .input::placeholder { color: #94a3b8 !important; }
 
-/* ── BOTONES ─────────────────────────────────────────────────── */
+/* ── SELECT nativo ───────────────────────────────────────── */
+.light-mode select {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+.light-mode select option {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+}
+
+/* ── TEXTAREA ────────────────────────────────────────────── */
+.light-mode textarea.input {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+/* ── BOTONES ─────────────────────────────────────────────── */
 .light-mode .btn-secondary {
-  background-color: #f3f4f6 !important;
-  color: #374151 !important;
-  border-color: #d1d5db !important;
+  background-color: #f1f5f9 !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
 }
 .light-mode .btn-secondary:hover {
-  background-color: #e5e7eb !important;
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
 }
 .light-mode .btn-ghost {
-  color: #6b7280 !important;
+  color: #64748b !important;
 }
 .light-mode .btn-ghost:hover {
-  background-color: #f3f4f6 !important;
-  color: #111827 !important;
+  background-color: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+.light-mode .btn-danger {
+  background-color: #fee2e2 !important;
+  color: #dc2626 !important;
+}
+.light-mode .btn-danger:hover {
+  background-color: #fecaca !important;
 }
 
-/* ── MODALES ─────────────────────────────────────────────────── */
+/* ── MODALES ─────────────────────────────────────────────── */
+.light-mode .modal-overlay {
+  background-color: rgba(0,0,0,0.35) !important;
+}
 .light-mode .modal-box {
   background-color: #ffffff !important;
-  border-color: #e5e7eb !important;
-  box-shadow: 0 20px 60px rgba(0,0,0,0.15) !important;
-}
-.light-mode .modal-overlay {
-  background-color: rgba(0,0,0,0.4) !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 25px 60px rgba(0,0,0,0.15) !important;
 }
 
-/* ── SELECTS ─────────────────────────────────────────────────── */
-.light-mode select option {
-  background-color: #ffffff;
-  color: #111827;
+/* ── BADGES ──────────────────────────────────────────────── */
+.light-mode .badge-green  { background-color: #dcfce7 !important; color: #15803d !important; border-color: #bbf7d0 !important; }
+.light-mode .badge-red    { background-color: #fee2e2 !important; color: #b91c1c !important; border-color: #fecaca !important; }
+.light-mode .badge-yellow { background-color: #fef3c7 !important; color: #b45309 !important; border-color: #fde68a !important; }
+.light-mode .badge-gray   { background-color: #f1f5f9 !important; color: #64748b !important; border-color: #e2e8f0 !important; }
+
+/* ── FONDOS DE ESTADO (emerald, red, yellow, orange, brand) ── */
+.light-mode [class*="bg-emerald-500/"]  { background-color: rgba(16,185,129,0.08) !important; }
+.light-mode [class*="bg-red-500/"]      { background-color: rgba(239,68,68,0.07) !important; }
+.light-mode [class*="bg-red-950"]       { background-color: #fee2e2 !important; }
+.light-mode [class*="bg-yellow-500/"]   { background-color: rgba(234,179,8,0.08) !important; }
+.light-mode [class*="bg-orange-500/"]   { background-color: rgba(249,115,22,0.08) !important; }
+.light-mode [class*="bg-brand-500/"]    { background-color: rgba(249,115,22,0.07) !important; }
+.light-mode [class*="bg-amber-500/"]    { background-color: rgba(245,158,11,0.08) !important; }
+.light-mode [class*="bg-purple-500/"]   { background-color: rgba(168,85,247,0.08) !important; }
+.light-mode [class*="bg-cyan-500/"]     { background-color: rgba(6,182,212,0.08) !important; }
+.light-mode [class*="bg-sky-500/"]      { background-color: rgba(14,165,233,0.08) !important; }
+
+/* ── BORDES DE ESTADO ────────────────────────────────────── */
+.light-mode [class*="border-emerald-500/"] { border-color: rgba(16,185,129,0.3) !important; }
+.light-mode [class*="border-red-500/"]     { border-color: rgba(239,68,68,0.3) !important; }
+.light-mode [class*="border-yellow-500/"]  { border-color: rgba(234,179,8,0.3) !important; }
+.light-mode [class*="border-brand-500/"]   { border-color: rgba(249,115,22,0.25) !important; }
+
+/* ── DROPDOWS (notificaciones, perfil) ───────────────────── */
+.light-mode .card.border.border-gray-700,
+.light-mode [class*="border-gray-700"] {
+  border-color: #e2e8f0 !important;
 }
 
-/* ── SCROLLBAR ───────────────────────────────────────────────── */
-.light-mode ::-webkit-scrollbar-track { background: #f3f4f6; }
-.light-mode ::-webkit-scrollbar-thumb { background: #d1d5db; }
+/* ── SCROLLBAR ───────────────────────────────────────────── */
+.light-mode ::-webkit-scrollbar-track { background: #f1f5f9; }
+.light-mode ::-webkit-scrollbar-thumb { background: #cbd5e1; }
+.light-mode ::-webkit-scrollbar-thumb:hover { background: #f97316; }
 
-/* ── GRADIENTES DE BIENVENIDA ────────────────────────────────── */
+/* ── GRADIENTE BIENVENIDA ────────────────────────────────── */
 .light-mode .bg-gradient-to-br {
-  background: linear-gradient(135deg, rgba(249,115,22,0.08), rgba(234,108,16,0.04)) !important;
+  background: linear-gradient(135deg, rgba(249,115,22,0.07) 0%, rgba(249,115,22,0.02) 100%) !important;
+  border-color: rgba(249,115,22,0.15) !important;
 }
 
-/* ── BADGES — mantener colores de estado ────────────────────── */
-.light-mode .badge-green  { background-color: #dcfce7 !important; color: #16a34a !important; }
-.light-mode .badge-red    { background-color: #fee2e2 !important; color: #dc2626 !important; }
-.light-mode .badge-yellow { background-color: #fef9c3 !important; color: #ca8a04 !important; }
-.light-mode .badge-gray   { background-color: #f3f4f6 !important; color: #6b7280 !important; }
-
-/* ── FONDOS CON COLOR DE ESTADO (emerald, red, yellow, brand) ── */
-.light-mode [class*="bg-emerald-500\/"] { background-color: rgba(16,185,129,0.1) !important; }
-.light-mode [class*="bg-red-500\/"]     { background-color: rgba(239,68,68,0.08) !important; }
-.light-mode [class*="bg-yellow-500\/"]  { background-color: rgba(234,179,8,0.1) !important; }
-.light-mode [class*="bg-brand-500\/"]   { background-color: rgba(249,115,22,0.08) !important; }
-
-/* ── TABS ACTIVOS ────────────────────────────────────────────── */
-.light-mode [class*="bg-brand-500\/10"] {
-  background-color: rgba(249,115,22,0.1) !important;
+/* ── LOGIN ───────────────────────────────────────────────── */
+.light-mode .fixed.inset-0 > div[class*="bg-brand"] {
+  opacity: 0.5 !important;
 }
+
+/* ── SECTION TITLE ───────────────────────────────────────── */
+.light-mode .section-title { color: #0f172a !important; }
+.light-mode .label { color: #475569 !important; }
