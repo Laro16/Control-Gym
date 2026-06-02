@@ -327,6 +327,47 @@ export const createNotification = async (notif) => {
   return { error }
 }
 
+// ── ANUNCIOS ──────────────────────────────────────────────────
+export const getAnnouncements = async (onlyActive = true) => {
+  let query = supabase
+    .from('announcements')
+    .select('*')
+    .order('pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+  if (onlyActive) {
+    query = query.eq('is_active', true)
+  }
+  const { data, error } = await query
+  return { data, error }
+}
+
+export const createAnnouncement = async (announcement) => {
+  const { data, error } = await supabase
+    .from('announcements')
+    .insert(announcement)
+    .select()
+    .single()
+  return { data, error }
+}
+
+export const updateAnnouncement = async (id, updates) => {
+  const { data, error } = await supabase
+    .from('announcements')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  return { data, error }
+}
+
+export const deleteAnnouncement = async (id) => {
+  const { error } = await supabase
+    .from('announcements')
+    .delete()
+    .eq('id', id)
+  return { error }
+}
+
 // ── PLANES ─────────────────────────────────────────────────
 export const getPlans = async () => {
   const { data, error } = await supabase
@@ -360,6 +401,44 @@ export const deletePlan = async (id) => {
   const { error } = await supabase
     .from('plans')
     .update({ is_active: false })
+    .eq('id', id)
+  return { error }
+}
+// ── ANUNCIOS ───────────────────────────────────────────────
+export const getAnnouncements = async () => {
+  const { data, error } = await supabase
+    .from('announcements')
+    .select('*')
+    .eq('visible', true)
+    .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString().split('T')[0]}`)
+    .order('pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+  return { data, error }
+}
+
+export const createAnnouncement = async (ann) => {
+  const { data, error } = await supabase
+    .from('announcements')
+    .insert(ann)
+    .select()
+    .single()
+  return { data, error }
+}
+
+export const updateAnnouncement = async (id, updates) => {
+  const { data, error } = await supabase
+    .from('announcements')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single()
+  return { data, error }
+}
+
+export const deleteAnnouncement = async (id) => {
+  const { error } = await supabase
+    .from('announcements')
+    .delete()
     .eq('id', id)
   return { error }
 }
