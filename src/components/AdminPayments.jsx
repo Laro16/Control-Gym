@@ -22,7 +22,7 @@ import {
   approvalStatusLabel, measurementFields, getMeasurementDiff,
   displayValue, getMeasurementComment, daysBetween,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
-  generateMasterExcel, today, addDays, calculateStreak
+  generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner } from './shared'
@@ -119,6 +119,15 @@ export function AdminPayments({ payments, onRefresh, profile }) {
                         <X className="w-4 h-4" />
                       </button>
                     </>
+                  )}
+                  {p.status === 'approved' && (
+                    <button
+                      className="w-8 h-8 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 rounded-lg flex items-center justify-center transition-all"
+                      onClick={() => generateReceiptImage(p, p.member, import.meta.env.VITE_GYM_NAME || 'GYM')}
+                      title="Descargar recibo"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
                   )}
                   <button className="btn-ghost p-1.5" onClick={() => sendPaymentReminder(p, p.member)} title="Recordatorio WhatsApp">
                     <MessageCircle className="w-4 h-4" />
