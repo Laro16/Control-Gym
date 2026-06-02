@@ -1,12 +1,14 @@
-import { useMemo } from 'react'
 import {
   Flame, CreditCard, AlertTriangle, CheckCircle,
   Zap, Clock, AlertCircle
 } from 'lucide-react'
+import { AnnouncementBanner } from './AnnouncementBanner'
+import { useState, useEffect } from 'react'
 import {
   formatDate, formatCurrency, getMemberPaymentStatus,
   paymentStatusLabel, calculateStreak, today, daysBetween
 } from '../utils/helpers'
+import { getAnnouncements } from '../supabase'
 
 function getGreeting() {
   const h = new Date().getHours()
@@ -49,7 +51,16 @@ function PaymentStatusIcon({ status }) {
 }
 
 export function UserHome({ member, payments, profile, attendance, onNavigate }) {
-  const streak      = useMemo(() => calculateStreak(attendance || []), [attendance])
+  const [announcements, setAnnouncements] = useState([])
+
+  useEffect(() => {
+    getAnnouncements(true).then(({ data }) => {
+      const now = new Date()
+      const valid = (data || []).filter(a => !a.expires_at || new Date(a.expires_at) > now)
+      setAnnouncements(valid.slice(0, 3)) // máximo 3 en el inicio
+    })
+  }, [])
+  const streak      = calculateStreak(attendance || [])
   const todayStr    = today()
   const markedToday = (attendance || []).some(a => a.attended_date === todayStr)
   const greeting    = getGreeting()
@@ -90,6 +101,9 @@ export function UserHome({ member, payments, profile, attendance, onNavigate }) 
 
   return (
     <div className="space-y-4 animate-fade-in max-w-lg mx-auto">
+
+      {/* ── ANUNCIOS */}
+      <AnnouncementBanner />
 
       {/* ── BIENVENIDA ──────────────────────────────────── */}
       <div className="card bg-gradient-to-br from-brand-500/10 to-brand-700/5 border-brand-500/20">
@@ -246,6 +260,40 @@ export function UserHome({ member, payments, profile, attendance, onNavigate }) 
       {!member && (
         <div className="card border-yellow-500/20 bg-yellow-500/5">
           <p className="text-yellow-400 text-sm">Tu perfil aún no está configurado. Contacta al administrador.</p>
+        </div>
+      )}
+
+      {/* Anuncios del gimnasio */}
+      {announcements.length > 0 && (
+        <div>
+          <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            📢 Anuncios del gimnasio
+          </h3>
+          <div className="space-y-2">
+            {announcements.map(a => (
+              <button
+                key={a.id}
+                onClick={() => onNavigate?.('news')}
+                className={`card w-full text-left hover:border-gray-600 transition-all active:scale-95 ${a.pinned ? 'border-brand-500/25' : ''}`}
+              >
+                <div className="flex items-start gap-3">
+                  <span className="text-xl flex-shrink-0">{a.emoji}</span>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{a.title}</p>
+                    <p className="text-xs text-gray-400 truncate">{a.body}</p>
+                  </div>
+                </div>
+              </button>
+            ))}
+            {announcements.length > 0 && (
+              <button
+                onClick={() => onNavigate?.('news')}
+                className="text-xs text-brand-400 hover:text-brand-300 w-full text-center py-1"
+              >
+                Ver todos los anuncios →
+              </button>
+            )}
+          </div>
         </div>
       )}
 
