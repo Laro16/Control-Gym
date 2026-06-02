@@ -18,8 +18,6 @@ import { AdminPlans } from './AdminPlans'
 import { AdminReports } from './AdminReports'
 import { AdminAnnouncements } from './AdminAnnouncements'
 import { AdminStats } from './AdminStats'
-import { AdminAnnouncements } from './AdminAnnouncements'
-import { AdminStats } from './AdminStats'
 
 export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [tab, setTab]             = useState('overview')
@@ -314,7 +312,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
             {tab === 'plans'    && <AdminPlans    plans={plans} onRefresh={loadData} />}
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
             {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
-            {tab === 'announcements' && <AdminAnnouncements profile={profile} />}
+            {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} />}
           </>
         )}
       </main>
