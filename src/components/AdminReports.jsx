@@ -4,7 +4,7 @@ import {
   supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
   createPayment, updatePayment, createMeasurement,
-  updateMember, deleteMember, getPlans, createPlan, updatePlan,
+  updateMember, getPlans, createPlan, updatePlan,
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
   markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto
