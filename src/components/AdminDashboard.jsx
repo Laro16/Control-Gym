@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X
+  CreditCard, Layers, FileText, X, Megaphone
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -16,6 +16,8 @@ import { AdminMembers } from './AdminMembers'
 import { AdminPayments } from './AdminPayments'
 import { AdminPlans } from './AdminPlans'
 import { AdminReports } from './AdminReports'
+import { AdminAnnouncements } from './AdminAnnouncements'
+import { AdminAnnouncements } from './AdminAnnouncements'
 
 export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [tab, setTab]             = useState('overview')
@@ -106,11 +108,12 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const unread = notifications.filter(n => !n.is_read).length
 
   const tabs = [
-    { id: 'overview', label: 'Inicio',   icon: Home },
-    { id: 'members',  label: 'Miembros', icon: Users },
-    { id: 'payments', label: 'Pagos',    icon: CreditCard },
-    { id: 'plans',    label: 'Planes',   icon: Layers },
-    { id: 'reports',  label: 'Reportes', icon: FileText },
+    { id: 'overview',       label: 'Inicio',    icon: Home },
+    { id: 'members',        label: 'Miembros',  icon: Users },
+    { id: 'payments',       label: 'Pagos',     icon: CreditCard },
+    { id: 'plans',          label: 'Planes',    icon: Layers },
+    { id: 'announcements',  label: 'Anuncios',  icon: Megaphone },
+    { id: 'reports',        label: 'Reportes',  icon: FileText },
   ]
 
   const handleLogoUpload = async (e) => {
@@ -306,7 +309,8 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
             {tab === 'members'  && <AdminMembers  members={members} plans={plans} onRefresh={loadData} />}
             {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} profile={profile} />}
             {tab === 'plans'    && <AdminPlans    plans={plans} onRefresh={loadData} />}
-            {tab === 'reports'  && <AdminReports  members={members} payments={payments} />}
+            {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
+            {tab === 'announcements' && <AdminAnnouncements profile={profile} />}
           </>
         )}
       </main>
