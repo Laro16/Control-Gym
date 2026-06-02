@@ -392,3 +392,112 @@ export const generateMasterExcel = (members, payments) => {
 // ── MONEDA ─────────────────────────────────────────────────
 export const formatCurrency = (amount) =>
   `Q ${Number(amount || 0).toFixed(2)}`
+
+// ── RECIBO DE CAJA COMO IMAGEN (PNG) ──────────────────────
+// Genera un recibo visual descargable usando Canvas, sin librerias
+export const generateReceiptImage = (payment, member, gymName) => {
+  const canvas = document.createElement('canvas')
+  const scale  = 2 // alta resolucion
+  const W = 380, H = 560
+  canvas.width  = W * scale
+  canvas.height = H * scale
+  const ctx = canvas.getContext('2d')
+  ctx.scale(scale, scale)
+
+  // Fondo blanco
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(0, 0, W, H)
+
+  // Banda superior naranja
+  ctx.fillStyle = '#f97316'
+  ctx.fillRect(0, 0, W, 90)
+
+  // Nombre del gimnasio
+  ctx.fillStyle = '#ffffff'
+  ctx.font = 'bold 24px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText(gymName || 'GYM', W/2, 42)
+
+  ctx.font = '13px Arial, sans-serif'
+  ctx.fillStyle = 'rgba(255,255,255,0.9)'
+  ctx.fillText('RECIBO DE PAGO', W/2, 66)
+
+  // Numero de recibo y fecha
+  const recId = payment.id ? payment.id.slice(0, 8).toUpperCase() : '--------'
+  ctx.fillStyle = '#64748b'
+  ctx.font = '11px Arial, sans-serif'
+  ctx.textAlign = 'left'
+  ctx.fillText(`Recibo #: ${recId}`, 30, 120)
+  ctx.textAlign = 'right'
+  ctx.fillText(`Fecha: ${formatDate(payment.payment_date || today())}`, W - 30, 120)
+
+  // Linea separadora
+  ctx.strokeStyle = '#e2e8f0'
+  ctx.lineWidth = 1
+  ctx.beginPath(); ctx.moveTo(30, 138); ctx.lineTo(W - 30, 138); ctx.stroke()
+
+  // Datos del cliente
+  let y = 170
+  const row = (label, value, bold) => {
+    ctx.textAlign = 'left'
+    ctx.fillStyle = '#94a3b8'
+    ctx.font = '11px Arial, sans-serif'
+    ctx.fillText(label, 30, y)
+    ctx.textAlign = 'right'
+    ctx.fillStyle = '#0f172a'
+    ctx.font = `${bold ? 'bold ' : ''}14px Arial, sans-serif`
+    ctx.fillText(String(value), W - 30, y)
+    y += 34
+  }
+
+  row('Cliente', member?.profile?.full_name || '—', true)
+  row('Plan', member?.plan?.name || '—')
+  row('Metodo de pago', payment.payment_method === 'cash' ? 'Efectivo' : payment.payment_method === 'transfer' ? 'Transferencia' : 'Deposito')
+  row('Concepto', payment.notes || 'Mensualidad')
+  row('Vence', formatDate(payment.due_date))
+
+  // Caja del monto
+  y += 10
+  ctx.fillStyle = '#f0fdf4'
+  ctx.fillRect(30, y, W - 60, 70)
+  ctx.strokeStyle = '#bbf7d0'
+  ctx.strokeRect(30, y, W - 60, 70)
+
+  ctx.textAlign = 'center'
+  ctx.fillStyle = '#16a34a'
+  ctx.font = '12px Arial, sans-serif'
+  ctx.fillText('TOTAL PAGADO', W/2, y + 26)
+  ctx.font = 'bold 32px Arial, sans-serif'
+  ctx.fillText(formatCurrency(payment.amount), W/2, y + 56)
+
+  // Sello PAGADO
+  y += 110
+  ctx.save()
+  ctx.translate(W/2, y + 20)
+  ctx.rotate(-0.12)
+  ctx.strokeStyle = '#16a34a'
+  ctx.lineWidth = 3
+  ctx.strokeRect(-70, -22, 140, 44)
+  ctx.fillStyle = '#16a34a'
+  ctx.font = 'bold 22px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('PAGADO', 0, 8)
+  ctx.restore()
+
+  // Pie
+  ctx.fillStyle = '#94a3b8'
+  ctx.font = '10px Arial, sans-serif'
+  ctx.textAlign = 'center'
+  ctx.fillText('Gracias por tu pago. Conserva este recibo.', W/2, H - 40)
+  ctx.fillText(`Generado el ${formatDate(today())}`, W/2, H - 24)
+
+  // Descargar
+  canvas.toBlob((blob) => {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `recibo-${member?.profile?.full_name?.split(' ')[0] || 'pago'}-${recId}.png`
+    a.click()
+    URL.revokeObjectURL(url)
+  }, 'image/png')
+}
