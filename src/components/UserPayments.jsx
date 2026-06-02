@@ -12,7 +12,7 @@ import {
   supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
   createPayment, updatePayment, createMeasurement,
-  updateMember, deleteMember, getPlans, createPlan, updatePlan,
+  updateMember, getPlans, createPlan, updatePlan,
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
   markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto
@@ -22,7 +22,7 @@ import {
   approvalStatusLabel, measurementFields, getMeasurementDiff,
   displayValue, getMeasurementComment, daysBetween,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
-  generateMasterExcel, today, addDays, calculateStreak
+  generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner } from './shared'
@@ -142,6 +142,12 @@ export function UserPayments({ payments, member, onRefresh }) {
                 <button className="btn-ghost text-sm" onClick={() => generatePaymentPDF(p, member)}>
                   <Download className="w-3.5 h-3.5" /> PDF
                 </button>
+                {/* Recibo imagen (solo aprobados) */}
+                {p.status === 'approved' && (
+                  <button className="btn-ghost text-sm" onClick={() => generateReceiptImage(p, member, import.meta.env.VITE_GYM_NAME || 'GYM')}>
+                    <Download className="w-3.5 h-3.5" /> Recibo
+                  </button>
+                )}
               </div>
             </div>
           )
