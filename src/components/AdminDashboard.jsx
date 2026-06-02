@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X, Megaphone
+  CreditCard, Layers, FileText, X, Megaphone, BarChart3
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -17,7 +17,9 @@ import { AdminPayments } from './AdminPayments'
 import { AdminPlans } from './AdminPlans'
 import { AdminReports } from './AdminReports'
 import { AdminAnnouncements } from './AdminAnnouncements'
+import { AdminStats } from './AdminStats'
 import { AdminAnnouncements } from './AdminAnnouncements'
+import { AdminStats } from './AdminStats'
 
 export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [tab, setTab]             = useState('overview')
@@ -112,6 +114,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     { id: 'members',        label: 'Miembros',  icon: Users },
     { id: 'payments',       label: 'Pagos',     icon: CreditCard },
     { id: 'plans',          label: 'Planes',    icon: Layers },
+    { id: 'stats',          label: 'Estadísticas', icon: BarChart3 },
     { id: 'announcements',  label: 'Anuncios',  icon: Megaphone },
     { id: 'reports',        label: 'Reportes',  icon: FileText },
   ]
@@ -309,6 +312,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
             {tab === 'members'  && <AdminMembers  members={members} plans={plans} onRefresh={loadData} />}
             {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} profile={profile} />}
             {tab === 'plans'    && <AdminPlans    plans={plans} onRefresh={loadData} />}
+            {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
             {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
             {tab === 'announcements' && <AdminAnnouncements profile={profile} />}
           </>
