@@ -27,6 +27,12 @@ export function CheckIn({ code, profile, onExit }) {
 
         if (gym.checkin_code !== code) { setState('wrong_gym'); return }
 
+        // Config de racha del gimnasio (días cerrados / festivos)
+        const opts = {
+          closedWeekdays: gym.closed_weekdays || [0, 6],
+          holidays: Array.isArray(gym.holidays) ? gym.holidays : [],
+        }
+
         // 2) Los admins no tienen ficha de miembro
         if (profile.role === 'admin') { setState('admin'); return }
 
@@ -52,7 +58,7 @@ export function CheckIn({ code, profile, onExit }) {
         const already  = (attendance || []).some(a => a.attended_date === todayStr)
 
         if (already) {
-          setStreak(calculateStreak(attendance || []))
+          setStreak(calculateStreak(attendance || [], opts))
           setState('already')
           return
         }
@@ -61,7 +67,7 @@ export function CheckIn({ code, profile, onExit }) {
         await markAttendance(member.id, todayStr)
         const { data: fresh } = await getAttendance(member.id)
         if (cancelled) return
-        const newStreak = calculateStreak(fresh || [])
+        const newStreak = calculateStreak(fresh || [], opts)
         setStreak(newStreak)
 
         // Actualizar mejor racha si se superó
