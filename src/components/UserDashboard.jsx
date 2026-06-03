@@ -60,8 +60,9 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     }
     setLoading(false)
 
-    // Logo del gimnasio
-    const { data: gymData } = await supabase.from('gyms').select('logo_url').limit(1).single()
+    // Logo del gimnasio (el del miembro)
+    const { data: gymData } = await supabase
+      .from('gyms').select('logo_url').eq('id', profile.gym_id).single()
     if (gymData?.logo_url) setGymLogo(gymData.logo_url)
   }, [profile.id])
 
