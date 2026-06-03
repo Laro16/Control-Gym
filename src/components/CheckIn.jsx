@@ -1,157 +1,182 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { QRCodeCanvas } from 'qrcode.react'
-import { QrCode, Printer, Download, RefreshCw, Check, Copy, AlertCircle } from 'lucide-react'
-import { getMyGym, updateGym } from '../supabase'
-import { Spinner } from './shared'
+import { useState, useEffect } from 'react'
+import { CheckCircle, Flame, AlertCircle, XCircle, Dumbbell, LogIn } from 'lucide-react'
+import { supabase, getMyGym, getAttendance, markAttendance } from '../supabase'
+import { today, calculateStreak, getMemberPaymentStatus } from '../utils/helpers'
+import Login from './Login'
 
-function randomCode() {
-  // 10 caracteres alfanuméricos
-  return Array.from({ length: 10 }, () =>
-    'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]
-  ).join('')
-}
+// Estados posibles del check-in
+// 'working' | 'success' | 'already' | 'wrong_gym' | 'no_member' | 'admin' | 'error'
 
-export function CheckInQR({ profile }) {
-  const [gym, setGym]         = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [busy, setBusy]       = useState(false)
-  const [copied, setCopied]   = useState(false)
-  const [confirmRegen, setConfirmRegen] = useState(false)
-  const qrRef = useRef(null)
+export function CheckIn({ code, profile, onExit }) {
+  const [state, setState]   = useState('working')
+  const [streak, setStreak] = useState(0)
+  const [gymName, setGymName] = useState('')
+  const [overdue, setOverdue] = useState(false)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    const { data } = await getMyGym(profile.gym_id)
-    setGym(data || null)
-    setLoading(false)
-  }, [profile.gym_id])
+  useEffect(() => {
+    if (!profile) return
+    let cancelled = false
 
-  useEffect(() => { load() }, [load])
+    const run = async () => {
+      try {
+        // 1) Cargar el gimnasio del propio usuario y validar el código
+        const { data: gym } = await getMyGym(profile.gym_id)
+        if (cancelled) return
+        if (!gym) { setState('error'); return }
+        setGymName(gym.name)
 
-  if (loading) return <Spinner />
-  if (!gym) return (
-    <div className="card text-center py-10">
-      <AlertCircle className="w-10 h-10 text-gray-600 mx-auto mb-3" />
-      <p className="text-gray-400 text-sm">No se pudo cargar el gimnasio.</p>
-    </div>
-  )
+        if (gym.checkin_code !== code) { setState('wrong_gym'); return }
 
-  const checkinUrl = `${window.location.origin}/#checkin/${gym.checkin_code}`
+        // 2) Los admins no tienen ficha de miembro
+        if (profile.role === 'admin') { setState('admin'); return }
 
-  const getCanvas = () => qrRef.current?.querySelector('canvas')
+        // 3) Buscar la ficha de miembro
+        const { data: member } = await supabase
+          .from('members')
+          .select('*, plan:plans(*)')
+          .eq('profile_id', profile.id)
+          .single()
+        if (cancelled) return
+        if (!member) { setState('no_member'); return }
 
-  const handleDownload = () => {
-    const canvas = getCanvas()
-    if (!canvas) return
-    const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png')
-    a.download = `check-in-${gym.name.replace(/\s+/g, '-').toLowerCase()}.png`
-    a.click()
-  }
+        // Nota de cuota vencida (no bloquea el check-in)
+        const { data: payments } = await supabase
+          .from('payments').select('*').eq('member_id', member.id)
+        if (cancelled) return
+        setOverdue(getMemberPaymentStatus(member, payments || []) === 'overdue')
 
-  const handlePrint = () => {
-    const canvas = getCanvas()
-    if (!canvas) return
-    const dataUrl = canvas.toDataURL('image/png')
-    const w = window.open('', '_blank', 'width=600,height=800')
-    if (!w) return
-    w.document.write(`
-      <html><head><title>Check-in ${gym.name}</title>
-      <style>
-        body{font-family:system-ui,sans-serif;text-align:center;padding:48px 24px;color:#111}
-        h1{font-size:28px;margin:0 0 4px}
-        p{color:#555;margin:0 0 32px;font-size:16px}
-        img{width:340px;height:340px}
-        .foot{margin-top:28px;font-size:15px;color:#333}
-      </style></head>
-      <body>
-        <h1>${gym.name}</h1>
-        <p>Escanea para registrar tu asistencia</p>
-        <img src="${dataUrl}" />
-        <p class="foot">Apunta la cámara de tu teléfono al código</p>
-        <script>window.onload=()=>{window.print()}</script>
-      </body></html>
-    `)
-    w.document.close()
-  }
+        // 4) ¿Ya registró hoy?
+        const { data: attendance } = await getAttendance(member.id)
+        if (cancelled) return
+        const todayStr = today()
+        const already  = (attendance || []).some(a => a.attended_date === todayStr)
 
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(checkinUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch { /* sin portapapeles */ }
-  }
+        if (already) {
+          setStreak(calculateStreak(attendance || []))
+          setState('already')
+          return
+        }
 
-  const handleRegenerate = async () => {
-    setBusy(true)
-    const newCode = randomCode()
-    const { data } = await updateGym(profile.gym_id, { checkin_code: newCode })
-    if (data) setGym(data)
-    setConfirmRegen(false)
-    setBusy(false)
-  }
+        // 5) Registrar asistencia de hoy
+        await markAttendance(member.id, todayStr)
+        const { data: fresh } = await getAttendance(member.id)
+        if (cancelled) return
+        const newStreak = calculateStreak(fresh || [])
+        setStreak(newStreak)
 
-  return (
-    <div className="space-y-5 animate-fade-in max-w-xl">
-      <div>
-        <h2 className="section-title flex items-center gap-2">
-          <QrCode className="w-5 h-5 text-brand-500" />
-          Código de check-in
-        </h2>
-        <p className="text-gray-500 text-sm mt-1">
-          Imprime este QR y pégalo en la entrada. Tus miembros lo escanean para registrar su asistencia.
-        </p>
-      </div>
+        // Actualizar mejor racha si se superó
+        if (newStreak > (member.best_streak || 0)) {
+          await supabase.from('members')
+            .update({ best_streak: newStreak })
+            .eq('id', member.id)
+        }
 
-      <div className="card flex flex-col items-center text-center">
-        <div ref={qrRef} className="bg-white p-4 rounded-2xl">
-          <QRCodeCanvas value={checkinUrl} size={220} level="M" includeMargin={false} />
-        </div>
-        <p className="font-semibold text-white mt-4">{gym.name}</p>
-        <p className="text-xs text-gray-500">Escanea para registrar tu asistencia</p>
+        setState('success')
+      } catch {
+        if (!cancelled) setState('error')
+      }
+    }
 
-        <div className="flex flex-wrap gap-2 justify-center mt-5 w-full">
-          <button className="btn-primary flex-1 min-w-[140px]" onClick={handlePrint}>
-            <Printer className="w-4 h-4" /> Imprimir
-          </button>
-          <button className="btn-secondary flex-1 min-w-[140px]" onClick={handleDownload}>
-            <Download className="w-4 h-4" /> Descargar PNG
-          </button>
-        </div>
-      </div>
+    run()
+    return () => { cancelled = true }
+  }, [profile, code])
 
-      <div className="card space-y-3">
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Enlace del check-in</p>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 text-xs text-gray-300 bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2 truncate">
-            {checkinUrl}
-          </code>
-          <button className="btn-ghost p-2 rounded-lg" onClick={handleCopy} title="Copiar enlace">
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {confirmRegen ? (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 space-y-3">
-            <p className="text-yellow-400/90 text-sm flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              Al regenerar, el QR anterior dejará de funcionar. Tendrás que imprimir y pegar el nuevo.
-            </p>
-            <div className="flex gap-2">
-              <button className="btn-secondary flex-1" onClick={() => setConfirmRegen(false)} disabled={busy}>
-                Cancelar
-              </button>
-              <button className="btn-danger flex-1" onClick={handleRegenerate} disabled={busy}>
-                {busy ? 'Regenerando...' : 'Sí, regenerar'}
-              </button>
-            </div>
+  // ── Sin sesión: pedir login (el código se conserva en la URL) ──
+  if (!profile) {
+    return (
+      <div className="min-h-dvh bg-gray-950 flex flex-col items-center justify-center p-4">
+        <div className="text-center mb-6 max-w-sm">
+          <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-500/10 border border-brand-500/30 rounded-2xl mb-3">
+            <LogIn className="w-7 h-7 text-brand-500" />
           </div>
-        ) : (
-          <button className="btn-secondary w-full" onClick={() => setConfirmRegen(true)}>
-            <RefreshCw className="w-4 h-4" /> Regenerar código
-          </button>
-        )}
+          <h1 className="text-xl font-semibold text-white">Inicia sesión para registrar tu asistencia</h1>
+          <p className="text-gray-500 text-sm mt-1">Tu check-in se completará en cuanto entres.</p>
+        </div>
+        <Login />
+      </div>
+    )
+  }
+
+  // ── Pantallas de resultado ──
+  return (
+    <div className="min-h-dvh bg-gray-950 flex items-center justify-center p-4">
+      <div className="w-full max-w-sm animate-slide-up">
+        <div className="card text-center">
+          {state === 'working' && (
+            <div className="py-8">
+              <div className="w-10 h-10 border-2 border-gray-800 border-t-brand-500 rounded-full animate-spin mx-auto mb-4" />
+              <p className="text-gray-400 text-sm">Registrando tu asistencia...</p>
+            </div>
+          )}
+
+          {state === 'success' && (
+            <div className="py-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-emerald-500/10 border border-emerald-500/30 rounded-2xl mb-3">
+                <CheckCircle className="w-9 h-9 text-emerald-400" />
+              </div>
+              <h1 className="text-xl font-semibold text-white">¡Asistencia registrada!</h1>
+              <p className="text-gray-500 text-sm mt-1">{gymName}</p>
+              <div className="flex items-center justify-center gap-2 mt-5 bg-orange-500/10 border border-orange-500/20 rounded-xl py-3">
+                <Flame className="w-6 h-6 text-orange-400" />
+                <span className="text-2xl font-bold text-white">{streak}</span>
+                <span className="text-gray-400 text-sm">{streak === 1 ? 'día seguido' : 'días seguidos'}</span>
+              </div>
+              {overdue && (
+                <p className="text-yellow-400/90 text-xs mt-4 flex items-center justify-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5" /> Tu cuota está vencida, regulariza en recepción.
+                </p>
+              )}
+            </div>
+          )}
+
+          {state === 'already' && (
+            <div className="py-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-500/10 border border-brand-500/30 rounded-2xl mb-3">
+                <Flame className="w-9 h-9 text-brand-500" />
+              </div>
+              <h1 className="text-xl font-semibold text-white">Ya registraste hoy</h1>
+              <p className="text-gray-500 text-sm mt-1">Llevas {streak} {streak === 1 ? 'día seguido' : 'días seguidos'}. ¡Sigue así!</p>
+            </div>
+          )}
+
+          {state === 'wrong_gym' && (
+            <div className="py-6">
+              <XCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
+              <h1 className="text-lg font-semibold text-white">Este código no es de tu gimnasio</h1>
+              <p className="text-gray-500 text-sm mt-1">Escanea el QR de tu propio gimnasio para registrarte.</p>
+            </div>
+          )}
+
+          {state === 'no_member' && (
+            <div className="py-6">
+              <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
+              <h1 className="text-lg font-semibold text-white">No tienes ficha de miembro</h1>
+              <p className="text-gray-500 text-sm mt-1">Habla con tu gimnasio para que te registre.</p>
+            </div>
+          )}
+
+          {state === 'admin' && (
+            <div className="py-6">
+              <Dumbbell className="w-12 h-12 text-gray-500 mx-auto mb-3" />
+              <h1 className="text-lg font-semibold text-white">Eres administrador</h1>
+              <p className="text-gray-500 text-sm mt-1">El check-in es para los miembros del gimnasio.</p>
+            </div>
+          )}
+
+          {state === 'error' && (
+            <div className="py-6">
+              <XCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
+              <h1 className="text-lg font-semibold text-white">Algo salió mal</h1>
+              <p className="text-gray-500 text-sm mt-1">Intenta escanear de nuevo en un momento.</p>
+            </div>
+          )}
+
+          {state !== 'working' && (
+            <button className="btn-primary w-full mt-6" onClick={onExit}>
+              Ir a la app
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
