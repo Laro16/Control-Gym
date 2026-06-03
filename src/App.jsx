@@ -119,8 +119,11 @@ export default function App() {
   }
 
   if (status === 'ready' && profile) {
+    const isSuperAdmin =
+      !!import.meta.env.VITE_SUPERADMIN_EMAIL &&
+      profile.email?.toLowerCase() === import.meta.env.VITE_SUPERADMIN_EMAIL.toLowerCase()
     const props = { profile, onLogout: handleLogout, darkMode, onToggleDark: () => setDarkMode(d => !d) }
-    if (profile.role === 'admin') return <AdminDashboard {...props} />
+    if (profile.role === 'admin') return <AdminDashboard {...props} isSuperAdmin={isSuperAdmin} />
     return <UserDashboard {...props} />
   }
 
