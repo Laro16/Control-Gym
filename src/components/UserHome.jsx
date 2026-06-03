@@ -50,7 +50,7 @@ function PaymentStatusIcon({ status }) {
   return <CreditCard className="w-8 h-8 text-gray-500" />
 }
 
-export function UserHome({ member, payments, profile, attendance, onNavigate }) {
+export function UserHome({ member, payments, profile, attendance, streakOptions, onNavigate }) {
   const [announcements, setAnnouncements] = useState([])
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export function UserHome({ member, payments, profile, attendance, onNavigate }) 
       setAnnouncements(valid.slice(0, 3)) // máximo 3 en el inicio
     })
   }, [])
-  const streak      = calculateStreak(attendance || [])
+  const streak      = calculateStreak(attendance || [], streakOptions)
   const todayStr    = today()
   const markedToday = (attendance || []).some(a => a.attended_date === todayStr)
   const greeting    = getGreeting()
