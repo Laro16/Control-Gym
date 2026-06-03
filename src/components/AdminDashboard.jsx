@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, Building2, QrCode
+  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, Building2, QrCode, CalendarDays
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -20,6 +20,7 @@ import { AdminAnnouncements } from './AdminAnnouncements'
 import { AdminStats } from './AdminStats'
 import { GymOnboarding } from './GymOnboarding'
 import { CheckInQR } from './CheckInQR'
+import { GymSchedule } from './GymSchedule'
 
 export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSuperAdmin }) {
   const [tab, setTab]             = useState('overview')
@@ -120,6 +121,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
     { id: 'stats',          label: 'Estadísticas', icon: BarChart3 },
     { id: 'announcements',  label: 'Anuncios',  icon: Megaphone },
     { id: 'checkin',        label: 'Check-in',  icon: QrCode },
+    { id: 'calendar',       label: 'Calendario', icon: CalendarDays },
     { id: 'reports',        label: 'Reportes',  icon: FileText },
     ...(isSuperAdmin ? [{ id: 'platform', label: 'Plataforma', icon: Building2 }] : []),
   ]
@@ -370,7 +372,13 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
             {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
             {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} />}
-            {tab === 'checkin'       && <CheckInQR profile={profile} />}
+            {tab === 'checkin'       && (
+              <div className="space-y-8">
+                <CheckInQR profile={profile} />
+                <GymSchedule profile={profile} />
+              </div>
+            )}
+            {tab === 'calendar'      && <GymSchedule profile={profile} />}
             {tab === 'platform' && isSuperAdmin && <GymOnboarding />}
           </>
         )}
