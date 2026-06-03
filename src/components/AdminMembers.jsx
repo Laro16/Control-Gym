@@ -28,7 +28,7 @@ import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner } from './shared'
 
 // ── ADMIN MEMBERS ──────────────────────────────────────────
-export function AdminMembers({ members, plans, onRefresh }) {
+export function AdminMembers({ members, plans, onRefresh, gymId }) {
   const [selected, setSelected] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
@@ -109,7 +109,7 @@ export function AdminMembers({ members, plans, onRefresh }) {
         message="¿Eliminar este miembro? Esta acción no se puede deshacer."
       />
 
-      <CreateMemberModal open={showCreate} onClose={() => { setShowCreate(false); onRefresh() }} plans={plans} />
+      <CreateMemberModal open={showCreate} onClose={() => { setShowCreate(false); onRefresh() }} plans={plans} gymId={gymId} />
     </div>
   )
 }
@@ -397,7 +397,7 @@ function MeasurementForm({ memberId, onSave }) {
   )
 }
 
-function CreateMemberModal({ open, onClose, plans }) {
+function CreateMemberModal({ open, onClose, plans, gymId }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
     full_name: '', email: '', phone: '', password: '',
@@ -424,7 +424,8 @@ function CreateMemberModal({ open, onClose, plans }) {
     const { data: authData, error: authErr } = await adminCreateUser(
       form.email,
       form.password,
-      form.full_name
+      form.full_name,
+      gymId
     )
 
     if (authErr) {
@@ -452,16 +453,18 @@ function CreateMemberModal({ open, onClose, plans }) {
       full_name: form.full_name,
       phone: form.phone || null,
       birth_date: form.birth_date || null,
-      role: 'user'
+      role: 'user',
+      gym_id: gymId
     })
 
-    // 3) Crear el registro de miembro
+    // 3) Crear el registro de miembro (gym_id explícito; el trigger también lo respalda)
     const { error: memErr } = await supabase.from('members').insert({
       profile_id: userId,
       plan_id: form.plan_id || null,
       start_date: form.start_date,
       emergency_contact: form.emergency_contact || null,
       notes: form.notes || null,
+      gym_id: gymId,
     })
 
     if (memErr) {
