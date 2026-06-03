@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera
+  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, Building2
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -18,8 +18,9 @@ import { AdminPlans } from './AdminPlans'
 import { AdminReports } from './AdminReports'
 import { AdminAnnouncements } from './AdminAnnouncements'
 import { AdminStats } from './AdminStats'
+import { GymOnboarding } from './GymOnboarding'
 
-export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
+export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSuperAdmin }) {
   const [tab, setTab]             = useState('overview')
   const [members, setMembers]     = useState([])
   const [payments, setPayments]   = useState([])
@@ -52,8 +53,9 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     // Solo crea una si no existe ya una del mismo tipo en los últimos 3 días
     await generateAutoNotifications(members, payments)
 
-    // Cargar logo del gimnasio
-    const { data: gymData } = await supabase.from('gyms').select('logo_url').limit(1).single()
+    // Cargar logo del gimnasio (el propio del admin)
+    const { data: gymData } = await supabase
+      .from('gyms').select('logo_url').eq('id', profile.gym_id).single()
     if (gymData?.logo_url) setGymLogo(gymData.logo_url)
   }, [profile.id])
 
@@ -117,6 +119,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     { id: 'stats',          label: 'Estadísticas', icon: BarChart3 },
     { id: 'announcements',  label: 'Anuncios',  icon: Megaphone },
     { id: 'reports',        label: 'Reportes',  icon: FileText },
+    ...(isSuperAdmin ? [{ id: 'platform', label: 'Plataforma', icon: Building2 }] : []),
   ]
 
   const handleAvatarUpload = async (e) => {
@@ -153,7 +156,8 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     if (!file) return
     setUploadingLogo(true)
     const ext  = file.name.split('.').pop() || 'png'
-    const path = `gym-logo.${ext}`
+    // Ruta por gimnasio: evita que un gimnasio sobrescriba el logo de otro
+    const path = `${profile.gym_id}/logo.${ext}`
     await supabase.storage.from('logos').remove([path])
     const { error } = await supabase.storage.from('logos').upload(path, file, {
       upsert: true, cacheControl: '1', contentType: file.type
@@ -161,7 +165,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     if (!error) {
       const { data: urlData } = supabase.storage.from('logos').getPublicUrl(path)
       const url = `${urlData.publicUrl}?v=${Date.now()}`
-      await supabase.from('gyms').update({ logo_url: url }).neq('id', '00000000-0000-0000-0000-000000000000')
+      await supabase.from('gyms').update({ logo_url: url }).eq('id', profile.gym_id)
       setGymLogo(url)
     }
     setUploadingLogo(false)
@@ -358,12 +362,13 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
                 onNavigate={a => { if (a === 'refresh') loadData(); else setTab(a) }}
               />
             )}
-            {tab === 'members'  && <AdminMembers  members={members} plans={plans} onRefresh={loadData} />}
+            {tab === 'members'  && <AdminMembers  members={members} plans={plans} onRefresh={loadData} gymId={profile.gym_id} />}
             {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} profile={profile} />}
             {tab === 'plans'    && <AdminPlans    plans={plans} onRefresh={loadData} />}
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
             {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
             {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} />}
+            {tab === 'platform' && isSuperAdmin && <GymOnboarding />}
           </>
         )}
       </main>
