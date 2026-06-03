@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, Pin, Eye, EyeOff, Check, X } from 'lucide-react'
 import {
+  supabase,
   getAnnouncements, createAnnouncement,
   updateAnnouncement, deleteAnnouncement
 } from '../supabase'
@@ -119,25 +120,24 @@ function AnnouncementForm({ initial, onSave, onClose }) {
 
 export function AdminAnnouncements({ profileId, onRefresh }) {
   const [announcements, setAnnouncements] = useState([])
-  const [loaded, setLoaded] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState(null)
   const [confirmDel, setConfirmDel] = useState(null)
 
+  // Admin ve TODOS los anuncios (incluso ocultos y expirados)
   const load = async () => {
-    const { data } = await getAnnouncements()
-    // Admin ve todos, incluso los ocultos
-    const { data: all } = await import('../supabase').then(m =>
-      m.supabase.from('announcements').select('*')
-        .order('pinned', { ascending: false })
-        .order('created_at', { ascending: false })
-    )
-    setAnnouncements(all || data || [])
-    setLoaded(true)
+    setLoading(true)
+    const { data } = await supabase
+      .from('announcements')
+      .select('*')
+      .order('pinned', { ascending: false })
+      .order('created_at', { ascending: false })
+    setAnnouncements(data || [])
+    setLoading(false)
   }
 
-  // Cargar al montar
-  if (!loaded) { load(); return null }
+  useEffect(() => { load() }, [])
 
   const handleCreate = async (form) => {
     await createAnnouncement({ ...form, created_by: profileId })
@@ -175,7 +175,11 @@ export function AdminAnnouncements({ profileId, onRefresh }) {
         </button>
       </div>
 
-      {announcements.length === 0 ? (
+      {loading ? (
+        <div className="flex justify-center py-12">
+          <span className="w-6 h-6 border-2 border-gray-700 border-t-brand-500 rounded-full animate-spin" />
+        </div>
+      ) : announcements.length === 0 ? (
         <div className="text-center py-14 text-gray-500">
           <span className="text-5xl block mb-3">📢</span>
           <p className="font-medium">Sin anuncios publicados</p>
