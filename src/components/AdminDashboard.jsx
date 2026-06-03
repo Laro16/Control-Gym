@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, Building2
+  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, Building2, QrCode
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -19,6 +19,7 @@ import { AdminReports } from './AdminReports'
 import { AdminAnnouncements } from './AdminAnnouncements'
 import { AdminStats } from './AdminStats'
 import { GymOnboarding } from './GymOnboarding'
+import { CheckInQR } from './CheckInQR'
 
 export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSuperAdmin }) {
   const [tab, setTab]             = useState('overview')
@@ -118,6 +119,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
     { id: 'plans',          label: 'Planes',    icon: Layers },
     { id: 'stats',          label: 'Estadísticas', icon: BarChart3 },
     { id: 'announcements',  label: 'Anuncios',  icon: Megaphone },
+    { id: 'checkin',        label: 'Check-in',  icon: QrCode },
     { id: 'reports',        label: 'Reportes',  icon: FileText },
     ...(isSuperAdmin ? [{ id: 'platform', label: 'Plataforma', icon: Building2 }] : []),
   ]
@@ -368,6 +370,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
             {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
             {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} />}
+            {tab === 'checkin'       && <CheckInQR profile={profile} />}
             {tab === 'platform' && isSuperAdmin && <GymOnboarding />}
           </>
         )}
