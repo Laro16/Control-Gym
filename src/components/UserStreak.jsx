@@ -161,14 +161,14 @@ function StreakWarning({ streak, markedToday }) {
 }
 
 // ── COMPONENTE PRINCIPAL ───────────────────────────────────
-export function UserStreak({ attendance, member, payments, onRefresh, profile }) {
+export function UserStreak({ attendance, member, payments, onRefresh, profile, streakOptions }) {
   const [marking, setMarking]           = useState(false)
   const [celebration, setCelebration]   = useState(null) // achievement objeto
 
   const gender      = profile?.gender || 'male'
   const ACHIEVEMENTS = getAchievements(gender)
 
-  const streak      = calculateStreak(attendance)
+  const streak      = calculateStreak(attendance, streakOptions)
   const bestStreak  = member?.best_streak || 0
   const attended    = new Set(attendance.map(a => a.attended_date))
   const todayStr    = today()
