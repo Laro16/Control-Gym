@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X, Megaphone, BarChart3
+  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -29,6 +29,8 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [showNotifs, setShowNotifs] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [gymLogo, setGymLogo]         = useState(null)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [avatarPreview, setAvatarPreview]     = useState(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
 
   const loadData = useCallback(async () => {
@@ -116,6 +118,35 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     { id: 'announcements',  label: 'Anuncios',  icon: Megaphone },
     { id: 'reports',        label: 'Reportes',  icon: FileText },
   ]
+
+  const handleAvatarUpload = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setAvatarPreview(URL.createObjectURL(file))
+    setUploadingAvatar(true)
+    try {
+      const ext  = file.name.split('.').pop().toLowerCase() || 'jpg'
+      const path = `${profile.id}/avatar.${ext}`
+      await supabase.storage.from('avatars').remove([path])
+      const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, {
+        upsert: true, cacheControl: '1', contentType: file.type || 'image/jpeg'
+      })
+      if (upErr) {
+        alert('Error al subir: ' + upErr.message)
+        setAvatarPreview(null)
+      } else {
+        const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+        const finalUrl = `${urlData.publicUrl}?v=${Date.now()}`
+        await supabase.from('profiles').update({ avatar_url: finalUrl }).eq('id', profile.id)
+        profile.avatar_url = finalUrl
+        loadData()
+      }
+    } catch (err) {
+      alert('Error: ' + err.message)
+      setAvatarPreview(null)
+    }
+    setUploadingAvatar(false)
+  }
 
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0]
@@ -245,12 +276,32 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
-              {profile.avatar_url
-                ? <img src={profile.avatar_url} alt="avatar" className="w-10 h-10 rounded-full object-cover" />
-                : <div className="w-10 h-10 rounded-full bg-brand-500/20 flex items-center justify-center">
-                    <span className="font-bold text-brand-400">{profile.full_name?.[0]?.toUpperCase()}</span>
-                  </div>
-              }
+              {/* Avatar con botón de cámara */}
+              <div className="relative flex-shrink-0">
+                {(avatarPreview || profile.avatar_url)
+                  ? <img
+                      src={avatarPreview || profile.avatar_url}
+                      alt="avatar"
+                      className={`w-12 h-12 rounded-full object-cover transition-opacity ${uploadingAvatar ? 'opacity-40' : ''}`}
+                    />
+                  : <div className="w-12 h-12 rounded-full bg-brand-500/20 flex items-center justify-center">
+                      <span className="font-bold text-brand-400">{profile.full_name?.[0]?.toUpperCase()}</span>
+                    </div>
+                }
+                <label className={`absolute -bottom-1 -right-1 w-6 h-6 bg-brand-500 hover:bg-brand-600 rounded-full flex items-center justify-center cursor-pointer shadow-lg active:scale-90 transition-all ${uploadingAvatar ? 'opacity-50 pointer-events-none' : ''}`}>
+                  {uploadingAvatar
+                    ? <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    : <Camera className="w-3 h-3 text-white" />
+                  }
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    className="hidden"
+                    onChange={handleAvatarUpload}
+                    disabled={uploadingAvatar}
+                  />
+                </label>
+              </div>
               <div className="min-w-0">
                 <p className="font-semibold text-white text-sm truncate">{profile.full_name}</p>
                 <p className="text-xs text-gray-500 truncate">{profile.email}</p>
