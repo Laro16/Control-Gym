@@ -1,7 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
 import { supabase, signOut } from './supabase'
 import Login from './components/Login'
+import { CheckIn } from './components/CheckIn'
 import { AdminDashboard, UserDashboard } from './components/dashboard'
+
+// Lee el código de check-in del hash: #checkin/CODIGO
+function parseCheckin() {
+  const m = (window.location.hash || '').match(/^#checkin\/(.+)$/)
+  return m ? decodeURIComponent(m[1]) : null
+}
 
 async function fetchProfile(userId) {
   const { data } = await supabase
@@ -52,8 +59,16 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(() => {
     return localStorage.getItem('gymapp-theme') !== 'light'
   })
+  const [checkinCode, setCheckinCode] = useState(parseCheckin)
   const profileRef = useRef(null)
   const initDone   = useRef(false)
+
+  // Detectar cambios en el hash (#checkin/CODIGO)
+  useEffect(() => {
+    const onHash = () => setCheckinCode(parseCheckin())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
 
   // Aplicar tema al documento
   useEffect(() => {
@@ -100,6 +115,18 @@ export default function App() {
           <p className="text-gray-500 text-sm">Cargando...</p>
         </div>
       </div>
+    )
+  }
+
+  // Check-in por QR: una vez resuelta la sesión, tiene prioridad.
+  // Si no hay sesión, CheckIn muestra su propio login embebido.
+  if (checkinCode) {
+    return (
+      <CheckIn
+        code={checkinCode}
+        profile={status === 'ready' ? profile : null}
+        onExit={() => { window.location.hash = ''; setCheckinCode(null) }}
+      />
     )
   }
 
