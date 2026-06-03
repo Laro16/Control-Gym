@@ -32,6 +32,94 @@ export const signOut = () => supabase.auth.signOut()
 
 export const getSession = () => supabase.auth.getSession()
 
+// ── GIMNASIOS (multi-tenant) ───────────────────────────────
+// Lee el gimnasio del usuario actual (RLS solo deja ver el propio)
+export const getMyGym = async (gymId) => {
+  let query = supabase.from('gyms').select('*')
+  if (gymId) query = query.eq('id', gymId)
+  else query = query.limit(1)
+  const { data, error } = await query.single()
+  return { data, error }
+}
+
+// Actualiza datos del gimnasio actual (nombre, whatsapp, color, logo…)
+export const updateGym = async (gymId, updates) => {
+  const { data, error } = await supabase
+    .from('gyms')
+    .update(updates)
+    .eq('id', gymId)
+    .select()
+    .single()
+  return { data, error }
+}
+
+// ── ALTA DE UN GIMNASIO NUEVO + SU ADMIN (onboarding SaaS) ──
+// Crea en un solo paso: el gimnasio y su usuario administrador.
+// Usa la service key (salta RLS). Pensado para que TÚ des de alta
+// cada cliente que renta la app.
+export const provisionGymWithAdmin = async ({
+  gymName, whatsapp = null, color = '#F97316', address = null,
+  adminEmail, adminPassword, adminName,
+}) => {
+  if (!supabaseAdmin) {
+    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
+  }
+  if (!gymName || !adminEmail || !adminPassword || !adminName) {
+    return { error: { message: 'Faltan datos: nombre del gimnasio, y nombre/email/contraseña del admin' } }
+  }
+
+  // 1) Crear el gimnasio
+  const { data: gym, error: gymErr } = await supabaseAdmin
+    .from('gyms')
+    .insert({
+      name: gymName,
+      whatsapp_number: whatsapp,
+      primary_color: color || '#F97316',
+      address,
+    })
+    .select()
+    .single()
+  if (gymErr) return { error: gymErr }
+
+  // 2) Crear el usuario admin con su gym_id en los metadatos
+  const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+    email: adminEmail,
+    password: adminPassword,
+    email_confirm: true,
+    user_metadata: { full_name: adminName, role: 'admin', gym_id: gym.id },
+  })
+
+  if (authErr) {
+    // Rollback: si no se pudo crear el admin, borra el gimnasio recién creado
+    await supabaseAdmin.from('gyms').delete().eq('id', gym.id)
+    return { error: authErr }
+  }
+
+  // 3) Reforzar el perfil del admin (el trigger ya lo crea; esto asegura
+  //    role=admin y el gym_id correcto aunque el trigger fallara)
+  await supabaseAdmin.from('profiles').upsert({
+    id: authData.user.id,
+    email: adminEmail,
+    full_name: adminName,
+    role: 'admin',
+    gym_id: gym.id,
+  })
+
+  return { data: { gym, admin: authData.user }, error: null }
+}
+
+// Lista TODOS los gimnasios (solo super-admin, usa service key)
+export const listAllGyms = async () => {
+  if (!supabaseAdmin) {
+    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
+  }
+  const { data, error } = await supabaseAdmin
+    .from('gyms')
+    .select('*')
+    .order('created_at', { ascending: false })
+  return { data, error }
+}
+
 // ── PERFIL ─────────────────────────────────────────────────
 export const getProfile = async (userId) => {
   const { data, error } = await supabase
@@ -44,7 +132,9 @@ export const getProfile = async (userId) => {
 
 // ── CREAR USUARIO SIN AFECTAR SESIÓN DEL ADMIN ────────────
 // Si el email ya existia (usuario eliminado), lo reactiva con nueva contraseña
-export const adminCreateUser = async (email, password, fullName) => {
+// gymId: el gimnasio del admin que lo crea. Se guarda en los metadatos
+//        para que el trigger handle_new_user selle el gym_id en su perfil.
+export const adminCreateUser = async (email, password, fullName, gymId = null) => {
   if (!supabaseAdmin) {
     return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
   }
@@ -54,7 +144,7 @@ export const adminCreateUser = async (email, password, fullName) => {
     email,
     password,
     email_confirm: true,
-    user_metadata: { full_name: fullName, role: 'user' }
+    user_metadata: { full_name: fullName, role: 'user', gym_id: gymId }
   })
 
   if (!error) return { data, error: null }
@@ -82,19 +172,20 @@ export const adminCreateUser = async (email, password, fullName) => {
     {
       password,
       email_confirm: true,
-      user_metadata: { full_name: fullName, role: 'user' },
+      user_metadata: { full_name: fullName, role: 'user', gym_id: gymId },
       ban_duration: 'none',
     }
   )
 
   if (updateError) return { data: null, error: updateError }
 
-  // Recrear perfil por si quedo huerfano
-  await supabase.from('profiles').upsert({
+  // Recrear perfil por si quedo huerfano (con la service key para saltar RLS)
+  await supabaseAdmin.from('profiles').upsert({
     id: existingUser.id,
     email,
     full_name: fullName,
-    role: 'user'
+    role: 'user',
+    gym_id: gymId
   })
 
   return { data: { user: existingUser }, error: null }
