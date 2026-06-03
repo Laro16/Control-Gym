@@ -31,6 +31,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   const [loading, setLoading] = useState(true)
   const [showNotifs, setShowNotifs] = useState(false)
   const [gymLogo, setGymLogo]         = useState(null)
+  const [streakOptions, setStreakOptions] = useState({ closedWeekdays: [0, 6], holidays: [] })
   const [showAccount, setShowAccount] = useState(false)
   const prevNotifsCount = useRef(0)
 
@@ -60,10 +61,14 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     }
     setLoading(false)
 
-    // Logo del gimnasio (el del miembro)
+    // Datos del gimnasio del miembro: logo + config de racha
     const { data: gymData } = await supabase
-      .from('gyms').select('logo_url').eq('id', profile.gym_id).single()
+      .from('gyms').select('logo_url, closed_weekdays, holidays').eq('id', profile.gym_id).single()
     if (gymData?.logo_url) setGymLogo(gymData.logo_url)
+    if (gymData) setStreakOptions({
+      closedWeekdays: gymData.closed_weekdays || [0, 6],
+      holidays: Array.isArray(gymData.holidays) ? gymData.holidays : [],
+    })
   }, [profile.id])
 
   useEffect(() => { loadData() }, [loadData])
@@ -167,10 +172,10 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
         {loading ? <Spinner /> : (
           <>
-            {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} attendance={attendance} onNavigate={setTab} />}
+            {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} attendance={attendance} streakOptions={streakOptions} onNavigate={setTab} />}
             {tab === 'payments' && <UserPayments payments={payments} member={member} onRefresh={loadData} />}
             {tab === 'body'     && <UserBody measurements={measurements} photos={photos} member={member} onRefresh={loadData} />}
-            {tab === 'streak'   && <UserStreak attendance={attendance} member={member} payments={payments} onRefresh={loadData} profile={profile} />}
+            {tab === 'streak'   && <UserStreak attendance={attendance} member={member} payments={payments} onRefresh={loadData} profile={profile} streakOptions={streakOptions} />}
             {tab === 'plans'    && <UserPlans plans={plans} currentPlanId={member?.plan_id} />}
           </>
         )}
