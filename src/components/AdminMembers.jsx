@@ -119,18 +119,26 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
   const [tab, setTab] = useState('info')
   const [measurements, setMeasurements] = useState([])
   const [photos, setPhotos] = useState([])
+  const [attendance, setAttendance] = useState([])
   const [loadingData, setLoadingData] = useState(false)
   const [showMeasForm, setShowMeasForm] = useState(false)
+
+  const loadAttendance = async () => {
+    const a = await getAttendance(member.id)
+    setAttendance(a.data || [])
+  }
 
   useEffect(() => {
     const load = async () => {
       setLoadingData(true)
-      const [m, p] = await Promise.all([
+      const [m, p, a] = await Promise.all([
         getMeasurements(member.id),
-        getProgressPhotos(member.id)
+        getProgressPhotos(member.id),
+        getAttendance(member.id)
       ])
       setMeasurements(m.data || [])
       setPhotos(p.data || [])
+      setAttendance(a.data || [])
       setLoadingData(false)
     }
     load()
@@ -140,6 +148,7 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
     { id: 'info', label: 'Info' },
     { id: 'measures', label: 'Medidas' },
     { id: 'photos', label: 'Fotos' },
+    { id: 'attendance', label: 'Asistencia' },
   ]
 
   return (
@@ -203,6 +212,81 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
           {photos.length === 0 && <p className="text-gray-500 text-sm">Sin fotos de progreso</p>}
         </div>
       )}
+
+      {!loadingData && tab === 'attendance' && (
+        <AttendanceManager memberId={member.id} attendance={attendance} onChange={loadAttendance} />
+      )}
+    </div>
+  )
+}
+
+// ── GESTIÓN DE ASISTENCIA DEL ADMIN (respaldo / correcciones) ──
+function AttendanceManager({ memberId, attendance, onChange }) {
+  const todayStr = new Date().toISOString().split('T')[0]
+  const [date, setDate] = useState(todayStr)
+  const [busy, setBusy] = useState(false)
+
+  const marked = new Set((attendance || []).map(a => a.attended_date))
+  const recent = [...(attendance || [])]
+    .sort((a, b) => b.attended_date.localeCompare(a.attended_date))
+    .slice(0, 14)
+
+  const mark = async () => {
+    if (!date || marked.has(date)) return
+    setBusy(true)
+    await markAttendance(memberId, date)
+    await onChange()
+    setBusy(false)
+  }
+
+  const remove = async (d) => {
+    setBusy(true)
+    await removeAttendance(memberId, d)
+    await onChange()
+    setBusy(false)
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="bg-gray-800/40 border border-gray-700 rounded-xl p-3">
+        <label className="label">Marcar asistencia en una fecha</label>
+        <div className="flex gap-2">
+          <input type="date" className="input flex-1" max={todayStr}
+            value={date} onChange={e => setDate(e.target.value)} />
+          <button className="btn-primary" onClick={mark} disabled={busy || marked.has(date)}>
+            <Plus className="w-4 h-4" /> Marcar
+          </button>
+        </div>
+        {marked.has(date) && (
+          <p className="text-[11px] text-yellow-400/90 mt-1.5">Ese día ya está marcado.</p>
+        )}
+        <p className="text-[11px] text-gray-600 mt-1.5">
+          Úsalo como respaldo cuando el miembro no pudo escanear el QR.
+        </p>
+      </div>
+
+      <div>
+        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Últimas asistencias ({(attendance || []).length} en total)
+        </p>
+        {recent.length === 0 ? (
+          <p className="text-gray-500 text-sm">Sin asistencias registradas.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {recent.map(a => (
+              <div key={a.attended_date} className="flex items-center justify-between bg-gray-800/40 border border-gray-700 rounded-lg px-3 py-2">
+                <span className="text-sm text-gray-200 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4 text-emerald-400" /> {formatDate(a.attended_date)}
+                </span>
+                <button className="text-[11px] text-gray-600 hover:text-red-400 border border-gray-700 hover:border-red-500/30 px-2 py-1 rounded-lg transition-all"
+                  onClick={() => remove(a.attended_date)} disabled={busy}>
+                  Quitar
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   )
 }
