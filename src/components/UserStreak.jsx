@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Flame, Trophy, CheckCircle, Dumbbell, Star, Zap, Shield, Crown, Lock, CreditCard } from 'lucide-react'
+import { Flame, Trophy, CheckCircle, Dumbbell, Star, Zap, Shield, Crown, Lock, CreditCard, QrCode } from 'lucide-react'
 import { playAchievementSound } from '../App'
 import {
   supabase, markAttendance, removeAttendance, createNotification
@@ -323,7 +323,7 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
         </div>
       </div>
 
-      {/* Botón marcar / estado */}
+      {/* Estado de asistencia (el registro se hace escaneando el QR del gimnasio) */}
       {isPaymentBlocked && !markedToday ? (
         <div className="rounded-2xl bg-red-500/10 border-2 border-red-500/20 px-5 py-4 space-y-3">
           <div className="flex items-center gap-3">
@@ -341,38 +341,26 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
         </div>
       ) : markedToday ? (
         <div className="rounded-2xl bg-emerald-500/10 border-2 border-emerald-500/30 px-5 py-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-emerald-400">¡Entrenamiento completado!</p>
-                <p className="text-xs text-gray-500 mt-0.5">Ya registraste tu asistencia hoy</p>
-              </div>
+          <div className="flex items-center gap-3">
+            <CheckCircle className="w-6 h-6 text-emerald-400 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-emerald-400">¡Entrenamiento completado!</p>
+              <p className="text-xs text-gray-500 mt-0.5">Ya registraste tu asistencia hoy</p>
             </div>
-            <button
-              onClick={handleToggleToday}
-              disabled={marking}
-              className="text-[10px] text-gray-600 hover:text-red-400 border border-gray-700 hover:border-red-500/30 px-2 py-1 rounded-lg transition-all flex-shrink-0"
-              title="Desmarcar asistencia de hoy"
-            >
-              {marking
-                ? <span className="w-3 h-3 border border-current/30 border-t-current rounded-full animate-spin inline-block" />
-                : 'Desmarcar'
-              }
-            </button>
           </div>
         </div>
       ) : (
-        <button
-          className="w-full py-4 rounded-2xl font-semibold text-lg flex items-center justify-center gap-3 btn-primary transition-all active:scale-95"
-          onClick={handleToggleToday}
-          disabled={marking}
-        >
-          {marking
-            ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-            : <><Dumbbell className="w-5 h-5" /> Marcar asistencia de hoy</>
-          }
-        </button>
+        <div className="rounded-2xl bg-brand-500/10 border-2 border-brand-500/20 px-5 py-4">
+          <div className="flex items-center gap-3">
+            <QrCode className="w-6 h-6 text-brand-400 flex-shrink-0" />
+            <div>
+              <p className="font-semibold text-brand-300">Escanea el QR del gimnasio</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Apunta la cámara de tu teléfono al código en la entrada para registrar tu asistencia de hoy.
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Calendario visual */}
