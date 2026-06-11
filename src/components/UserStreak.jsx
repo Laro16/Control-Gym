@@ -4,7 +4,7 @@ import { playAchievementSound } from '../App'
 import {
   supabase, markAttendance, removeAttendance, createNotification
 } from '../supabase'
-import { calculateStreak, today, getMemberPaymentStatus, daysBetween } from '../utils/helpers'
+import { calculateStreak, today, getMemberPaymentStatus, daysBetween, addDays, parseDateStr, isRestDay } from '../utils/helpers'
 
 // ── LOGROS POR GÉNERO ─────────────────────────────────────
 const getAchievements = (gender) => {
@@ -186,10 +186,8 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
       p => p.member_id === member.id && p.status === 'approved'
     )
     if (!approved.length) {
-      const planDays  = member?.plan?.duration_days || 30
-      const d = new Date(member.start_date + 'T12:00:00')
-      d.setDate(d.getDate() + planDays)
-      return daysBetween(d.toISOString().split('T')[0], today()) > 2
+      const planDays = member?.plan?.duration_days || 30
+      return daysBetween(addDays(member.start_date, planDays), today()) > 2
     }
     return daysBetween(approved[0].due_date, today()) > 2
   })()
@@ -230,21 +228,19 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
   }
 
   // ── CALENDARIO 35 días ────────────────────────────────
+  // Usa fechas locales y respeta los días cerrados/feriados del gimnasio
   const calDays = []
   for (let i = 34; i >= 0; i--) {
-    const d   = new Date()
-    d.setDate(d.getDate() - i)
-    const str = d.toISOString().split('T')[0]
-    const dow = d.getDay()
+    const str  = addDays(todayStr, -i)
+    const dow  = parseDateStr(str).getDay()
+    const rest = isRestDay(str, streakOptions)
     calDays.push({
-      date:       str,
+      date:      str,
       dow,
-      didAttend:  attended.has(str),
-      isSunday:   dow === 0,
-      isSaturday: dow === 6,
-      isToday:    str === todayStr,
-      isFuture:   str > todayStr,
-      isMissed:   dow !== 0 && dow !== 6 && str < todayStr && str !== todayStr && !attended.has(str),
+      didAttend: attended.has(str),
+      isRest:    rest,
+      isToday:   str === todayStr,
+      isMissed:  !rest && str < todayStr && !attended.has(str),
     })
   }
   const offset     = calDays[0].dow === 0 ? 6 : calDays[0].dow - 1
@@ -375,7 +371,7 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
               <span className="w-2.5 h-2.5 rounded-sm bg-red-950 border border-red-900/50 inline-block" /> Fallé
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-sm bg-gray-800/30 border border-dashed border-gray-700 inline-block" /> Opcional
+              <span className="w-2.5 h-2.5 rounded-sm bg-gray-800/30 border border-dashed border-gray-700 inline-block" /> Cerrado
             </span>
           </div>
         </div>
@@ -388,18 +384,14 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
           {calDays.map(d => {
             let cls = 'bg-gray-800/20 text-gray-700'
 
-            if (d.isSunday)
-              cls = 'opacity-20 text-gray-800'
-            else if (d.isFuture)
-              cls = 'bg-gray-800/10 text-gray-800'
-            else if (d.didAttend)
+            if (d.didAttend)
               cls = 'bg-brand-500 text-white font-bold shadow-sm shadow-brand-500/50'
-            else if (d.isMissed)
-              cls = 'bg-red-950 border border-red-900/40 text-red-800'
-            else if (d.isSaturday)
-              cls = 'bg-gray-800/20 text-gray-600 border border-dashed border-gray-700/50'
             else if (d.isToday)
               cls = 'border-2 border-brand-500 text-brand-400 font-bold'
+            else if (d.isMissed)
+              cls = 'bg-red-950 border border-red-900/40 text-red-800'
+            else if (d.isRest)
+              cls = 'bg-gray-800/20 text-gray-600 border border-dashed border-gray-700/50'
 
             return (
               <div
@@ -407,13 +399,13 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
                 title={d.date}
                 className={`aspect-square rounded-lg flex items-center justify-center text-[10px] transition-all ${cls}`}
               >
-                {d.isSunday ? '·' : new Date(d.date + 'T12:00:00').getDate()}
+                {parseDateStr(d.date).getDate()}
               </div>
             )
           })}
         </div>
         <p className="text-[10px] text-gray-700 text-center mt-2">
-          Domingos no cuentan · Sábados son opcionales
+          Los días que el gimnasio cierra no rompen tu racha · Si entrenas, ¡siempre cuenta!
         </p>
       </div>
 
