@@ -4,7 +4,7 @@ import { TrendingUp, TrendingDown, Camera, ChevronDown, ChevronUp, Minus } from 
 import { uploadProgressPhoto, createProgressPhoto } from '../supabase'
 import {
   measurementFields, getMeasurementDiff, displayValue,
-  getMeasurementComment, formatDate, today
+  getMeasurementComment, formatDate, formatDateShort, today
 } from '../utils/helpers'
 
 // Campos que suben = bueno (músculo)
@@ -200,6 +200,133 @@ function CompareView({ latest, prev }) {
   )
 }
 
+// ── GRÁFICA DE PROGRESO (SVG puro, sin librerías) ──────────
+function ProgressChart({ measurements }) {
+  // Métricas que tienen al menos 2 datos registrados
+  const availableFields = measurementFields.filter(f =>
+    measurements.filter(m => m[f.key] != null).length >= 2
+  )
+
+  const [metricKey, setMetricKey] = useState(availableFields[0]?.key || 'weight_kg')
+  const [selectedIdx, setSelectedIdx] = useState(null)
+
+  if (!availableFields.length) return null
+
+  const field = measurementFields.find(f => f.key === metricKey) || availableFields[0]
+
+  // Datos: de más antiguo a más reciente, máximo 12 puntos
+  const data = [...measurements]
+    .reverse()
+    .filter(m => m[field.key] != null)
+    .slice(-12)
+    .map(m => ({
+      date:  m.measured_at,
+      value: field.convert ? Number(field.convert(m[field.key])) : Number(m[field.key]),
+    }))
+
+  if (data.length < 2) return null
+
+  const sel = selectedIdx !== null && data[selectedIdx] ? selectedIdx : data.length - 1
+
+  // Escalas
+  const W = 340, H = 150
+  const PAD = { top: 14, right: 14, bottom: 22, left: 38 }
+  const min = Math.min(...data.map(d => d.value))
+  const max = Math.max(...data.map(d => d.value))
+  const range = (max - min) || 1
+  const yMin = min - range * 0.15
+  const yMax = max + range * 0.15
+  const x = (i) => PAD.left + (i / (data.length - 1)) * (W - PAD.left - PAD.right)
+  const y = (v) => PAD.top + (1 - (v - yMin) / (yMax - yMin)) * (H - PAD.top - PAD.bottom)
+
+  const linePoints = data.map((d, i) => `${x(i).toFixed(1)},${y(d.value).toFixed(1)}`).join(' ')
+  const areaPath = `M ${x(0).toFixed(1)},${(H - PAD.bottom)} L ${linePoints.replace(/ /g, ' L ')} L ${x(data.length - 1).toFixed(1)},${H - PAD.bottom} Z`
+
+  // Tendencia total (primero → último) con semáforo según la métrica
+  const totalDiff = data[data.length - 1].value - data[0].value
+  const trendGood = isGoodChange(field.key, totalDiff)
+  const trendColor = totalDiff === 0 ? 'text-gray-500' : trendGood ? 'text-emerald-400' : 'text-red-400'
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-1">
+        <p className="text-xs font-semibold text-gray-400">📈 Mi evolución</p>
+        <span className={`text-xs font-bold flex items-center gap-1 ${trendColor}`}>
+          {totalDiff !== 0 && (totalDiff > 0
+            ? <TrendingUp className="w-3.5 h-3.5" />
+            : <TrendingDown className="w-3.5 h-3.5" />)}
+          {totalDiff > 0 ? '+' : ''}{totalDiff.toFixed(1)} {field.unit}
+          <span className="text-gray-600 font-normal">total</span>
+        </span>
+      </div>
+
+      {/* Selector de métrica */}
+      <div className="flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1" style={{ scrollbarWidth: 'none' }}>
+        {availableFields.map(f => (
+          <button
+            key={f.key}
+            onClick={() => { setMetricKey(f.key); setSelectedIdx(null) }}
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium whitespace-nowrap transition-all flex-shrink-0
+              ${f.key === field.key
+                ? 'bg-brand-500/15 text-brand-400 border border-brand-500/30'
+                : 'bg-gray-800/50 text-gray-500 border border-transparent'}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Punto seleccionado */}
+      <p className="text-center text-xs text-gray-500 mb-1">
+        <span className="text-white font-bold text-sm">{data[sel].value.toFixed(1)} {field.unit}</span>
+        {' · '}{formatDate(data[sel].date)}
+      </p>
+
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" style={{ touchAction: 'manipulation' }}>
+        <defs>
+          <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"  stopColor="#f97316" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+
+        {/* Líneas guía + etiquetas Y */}
+        {[yMax - (yMax - yMin) * 0.1, (yMax + yMin) / 2, yMin + (yMax - yMin) * 0.1].map((v, i) => (
+          <g key={i}>
+            <line x1={PAD.left} x2={W - PAD.right} y1={y(v)} y2={y(v)} stroke="#6b7280" strokeOpacity="0.15" strokeDasharray="3 4" />
+            <text x={PAD.left - 5} y={y(v) + 3} textAnchor="end" fontSize="9" fill="#6b7280">{v.toFixed(1)}</text>
+          </g>
+        ))}
+
+        {/* Área + línea */}
+        <path d={areaPath} fill="url(#chartFill)" />
+        <polyline points={linePoints} fill="none" stroke="#f97316" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+        {/* Puntos (con zona de toque amplia) */}
+        {data.map((d, i) => (
+          <g key={i} onClick={() => setSelectedIdx(i)} style={{ cursor: 'pointer' }}>
+            <circle cx={x(i)} cy={y(d.value)} r="13" fill="transparent" />
+            <circle
+              cx={x(i)} cy={y(d.value)}
+              r={i === sel ? 5 : 3.5}
+              fill={i === sel ? '#f97316' : '#1f2937'}
+              stroke="#f97316" strokeWidth="2"
+            />
+          </g>
+        ))}
+
+        {/* Fechas extremos */}
+        <text x={x(0)} y={H - 6} textAnchor="start" fontSize="9" fill="#6b7280">{formatDateShort(data[0].date)}</text>
+        <text x={x(data.length - 1)} y={H - 6} textAnchor="end" fontSize="9" fill="#6b7280">{formatDateShort(data[data.length - 1].date)}</text>
+      </svg>
+
+      <p className="text-[10px] text-gray-600 text-center mt-1">
+        Toca un punto para ver el detalle · Últimas {data.length} mediciones
+      </p>
+    </div>
+  )
+}
+
 // ── COMPONENTE PRINCIPAL ───────────────────────────────────
 export function UserBody({ measurements, photos, member, onRefresh }) {
   const [tab, setTab]         = useState('measures')
@@ -277,6 +404,7 @@ export function UserBody({ measurements, photos, member, onRefresh }) {
         <div className="space-y-3">
           {latest ? (
             <>
+              <ProgressChart measurements={measurements} />
               {measurements.map((m, i) => (
                 <MeasurementHistoryCard
                   key={m.id}
@@ -303,6 +431,7 @@ export function UserBody({ measurements, photos, member, onRefresh }) {
         <div className="space-y-3">
           {latest && prev ? (
             <>
+              <ProgressChart measurements={measurements} />
               <CompareView latest={latest} prev={prev} />
               <p className="text-xs text-center text-gray-600">
                 Comparando las últimas 2 mediciones registradas
