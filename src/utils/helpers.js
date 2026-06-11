@@ -186,8 +186,11 @@ export const getMeasurementDiff = (current, previous, key) => {
 
 const normalizeStreakOptions = (options = {}) => ({
   closedWeekdays: Array.isArray(options.closedWeekdays) ? options.closedWeekdays : [0, 6],
+  // Los feriados pueden venir como strings 'YYYY-MM-DD' o como
+  // objetos { date, label } (formato que guarda GymSchedule)
   holidays: new Set(
-    (Array.isArray(options.holidays) ? options.holidays : []).map(h => String(h).slice(0, 10))
+    (Array.isArray(options.holidays) ? options.holidays : [])
+      .map(h => String(h?.date || h).slice(0, 10))
   ),
 })
 
