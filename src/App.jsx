@@ -3,6 +3,7 @@ import { supabase, signOut } from './supabase'
 import Login from './components/Login'
 import { CheckIn } from './components/CheckIn'
 import { AdminDashboard, UserDashboard } from './components/dashboard'
+import { Toaster } from './components/shared'
 
 // Lee el código de check-in del hash: #checkin/CODIGO
 function parseCheckin() {
@@ -150,8 +151,8 @@ export default function App() {
       !!import.meta.env.VITE_SUPERADMIN_EMAIL &&
       profile.email?.toLowerCase() === import.meta.env.VITE_SUPERADMIN_EMAIL.toLowerCase()
     const props = { profile, onLogout: handleLogout, darkMode, onToggleDark: () => setDarkMode(d => !d) }
-    if (profile.role === 'admin') return <AdminDashboard {...props} isSuperAdmin={isSuperAdmin} />
-    return <UserDashboard {...props} />
+    if (profile.role === 'admin') return <><AdminDashboard {...props} isSuperAdmin={isSuperAdmin} /><Toaster /></>
+    return <><UserDashboard {...props} /><Toaster /></>
   }
 
   return null
