@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { toast } from './shared'
 import { TrendingUp, TrendingDown, Camera, ChevronDown, ChevronUp, Minus } from 'lucide-react'
 import { uploadProgressPhoto, createProgressPhoto } from '../supabase'
 import {
@@ -221,9 +222,10 @@ export function UserBody({ measurements, photos, member, onRefresh }) {
         photo_date: today(),
         angle:      selectedAngle,
       })
+      toast.success('Foto de progreso guardada')
       onRefresh()
     } else {
-      alert('Error al subir la foto. Intenta de nuevo.')
+      toast.error('Error al subir la foto. Intenta de nuevo.')
     }
     setUploading(false)
   }
@@ -350,7 +352,7 @@ export function UserBody({ measurements, photos, member, onRefresh }) {
             </span>
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
+              accept="image/*"
               className="hidden"
               onChange={handlePhotoUpload}
               disabled={uploading}

@@ -22,7 +22,7 @@ import {
   generateMasterExcel, today, addDays, calculateStreak
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner } from './shared'
+import { Modal, ConfirmModal, Spinner, toast } from './shared'
 
 // ── OVERVIEW ───────────────────────────────────────────────
 export function AdminOverview({ members, payments, profile, onNavigate }) {
@@ -273,7 +273,7 @@ function MemberStatusList({ members, payments, filter, setFilter }) {
                           const msg = `Hola ${m.profile?.full_name?.split(' ')[0]}, te recordamos que tu cuota ${st === 'overdue' ? 'está vencida' : 'vence pronto'}. Por favor realiza tu pago. ¡Gracias! 🏋️`
                           const num = (m.profile?.phone || '').replace(/[^0-9]/g, '')
                           if (num) window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank')
-                          else alert('Este miembro no tiene teléfono registrado')
+                          else toast.info('Este miembro no tiene teléfono registrado')
                         }}
                       >
                         <MessageCircle className="w-3.5 h-3.5" /> Recordatorio

@@ -25,7 +25,7 @@ import {
   generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner } from './shared'
+import { Modal, ConfirmModal, Spinner, toast } from './shared'
 
 // ── USER PAYMENTS ──────────────────────────────────────────
 export function UserPayments({ payments, member, onRefresh }) {
@@ -37,7 +37,7 @@ export function UserPayments({ payments, member, onRefresh }) {
     setUploading(paymentId)
     const { url, error } = await uploadVoucher(file, member.id)
     if (error) {
-      alert('Error al subir el comprobante. Verifica tu conexión e intenta de nuevo.')
+      toast.error('Error al subir el comprobante. Verifica tu conexión e intenta de nuevo.')
       setUploading(null)
       return
     }
@@ -49,6 +49,7 @@ export function UserPayments({ payments, member, onRefresh }) {
       message: 'Tu comprobante fue enviado. El administrador lo revisará pronto.',
     })
     setUploading(null)
+    toast.success('Comprobante enviado. El administrador lo revisará pronto.')
     onRefresh()
   }
 
@@ -128,7 +129,7 @@ export function UserPayments({ payments, member, onRefresh }) {
                     ) : (
                       <><Camera className="w-3.5 h-3.5" /> Subir comprobante</>
                     )}
-                    <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" className="hidden" disabled={!!uploading}
+                    <input type="file" accept="image/*" className="hidden" disabled={!!uploading}
                       onChange={e => e.target.files?.[0] && handleUploadVoucher(p.id, e.target.files[0])} />
                   </label>
                 )}
@@ -226,14 +227,14 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
   }
 
   const handleSubmit = async () => {
-    if (!selectedMonths.length) { alert('Selecciona al menos una cuota'); return }
-    if (!file) { alert('Debes subir el comprobante de pago (foto del depósito o transferencia)'); return }
+    if (!selectedMonths.length) { toast.info('Selecciona al menos una cuota'); return }
+    if (!file) { toast.info('Debes subir el comprobante de pago (foto del depósito o transferencia)'); return }
     if (!member) return
 
     setUploading(true)
 
     const { url, error } = await uploadVoucher(file, member.id)
-    if (error) { alert('Error al subir el comprobante. Intenta de nuevo.'); setUploading(false); return }
+    if (error) { toast.error('Error al subir el comprobante. Intenta de nuevo.'); setUploading(false); return }
 
     // Crear un pago por cada cuota seleccionada
     const months = [...selectedMonths].sort()
@@ -399,7 +400,7 @@ Por favor revisar y aprobar ✅`
                 <Camera className="w-8 h-8 text-gray-500" />
                 <span className="text-sm text-gray-400">Foto del depósito o transferencia</span>
                 <span className="text-xs text-gray-600">Toca para abrir la cámara o galería</span>
-                <input type="file" accept="image/jpeg,image/png,image/webp,image/heic" className="hidden" onChange={handleFileChange} />
+                <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
               </label>
             )}
           </div>

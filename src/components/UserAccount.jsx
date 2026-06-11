@@ -129,7 +129,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
             }
             <input
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/heic"
+              accept="image/*"
               className="hidden"
               onChange={handleAvatarUpload}
               disabled={uploading}

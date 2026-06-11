@@ -10,7 +10,7 @@ import {
   markAllNotificationsRead, createNotification
 } from '../supabase'
 import { formatDate, today, getMemberPaymentStatus, daysBetween } from '../utils/helpers'
-import { Spinner } from './shared'
+import { Spinner, toast } from './shared'
 import { AdminOverview } from './AdminOverview'
 import { AdminMembers } from './AdminMembers'
 import { AdminPayments } from './AdminPayments'
@@ -139,17 +139,18 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
         upsert: true, cacheControl: '1', contentType: file.type || 'image/jpeg'
       })
       if (upErr) {
-        alert('Error al subir: ' + upErr.message)
+        toast.error('Error al subir: ' + upErr.message)
         setAvatarPreview(null)
       } else {
         const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
         const finalUrl = `${urlData.publicUrl}?v=${Date.now()}`
         await supabase.from('profiles').update({ avatar_url: finalUrl }).eq('id', profile.id)
         profile.avatar_url = finalUrl
+        toast.success('Foto de perfil actualizada')
         loadData()
       }
     } catch (err) {
-      alert('Error: ' + err.message)
+      toast.error('Error: ' + err.message)
       setAvatarPreview(null)
     }
     setUploadingAvatar(false)
@@ -303,7 +304,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
                   }
                   <input
                     type="file"
-                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    accept="image/*"
                     className="hidden"
                     onChange={handleAvatarUpload}
                     disabled={uploadingAvatar}
@@ -320,7 +321,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
             <label className={`w-full flex items-center gap-2 text-brand-400 hover:text-brand-300 text-sm py-2 px-1 rounded-lg hover:bg-brand-500/10 cursor-pointer transition-all mb-1 ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
               <Dumbbell className="w-4 h-4" />
               {uploadingLogo ? 'Subiendo logo...' : 'Cambiar logo del gimnasio'}
-              <input type="file" accept="image/png,image/svg+xml,image/jpeg,image/webp" className="hidden" onChange={handleLogoUpload} />
+              <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
             </label>
             <button
               onClick={onLogout}
