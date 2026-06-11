@@ -3,31 +3,56 @@ import autoTable from 'jspdf-autotable'
 import * as XLSX from 'xlsx'
 
 // ── FECHAS ─────────────────────────────────────────────────
+// IMPORTANTE: todas las fechas se manejan en hora LOCAL (Guatemala),
+// nunca en UTC. Antes se usaba toISOString(), que devuelve UTC:
+// entre las 6pm y medianoche (UTC-6) daba la fecha de MAÑANA,
+// rompiendo rachas, asistencias y estados de pago.
+
+// Convierte un Date a 'YYYY-MM-DD' usando la hora local del dispositivo
+export const toLocalDateStr = (d) => {
+  const y   = d.getFullYear()
+  const m   = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+// Parsea 'YYYY-MM-DD' como fecha local a mediodía.
+// (new Date('2026-06-10') parsea como UTC medianoche y en GT
+//  retrocede al día anterior — por eso se ancla a las 12:00)
+export const parseDateStr = (s) => new Date(`${String(s).slice(0, 10)}T12:00:00`)
+
+// Acepta Date, timestamp ISO completo o 'YYYY-MM-DD'
+const asDate = (date) => {
+  if (date instanceof Date) return date
+  const s = String(date)
+  return s.length <= 10 ? parseDateStr(s) : new Date(s)
+}
+
 export const formatDate = (date) => {
   if (!date) return '—'
-  return new Date(date).toLocaleDateString('es-GT', {
+  return asDate(date).toLocaleDateString('es-GT', {
     day: '2-digit', month: 'short', year: 'numeric'
   })
 }
 
 export const formatDateShort = (date) => {
   if (!date) return '—'
-  return new Date(date).toLocaleDateString('es-GT', {
+  return asDate(date).toLocaleDateString('es-GT', {
     day: '2-digit', month: '2-digit', year: '2-digit'
   })
 }
 
-export const today = () => new Date().toISOString().split('T')[0]
+export const today = () => toLocalDateStr(new Date())
 
 export const addDays = (date, days) => {
-  const d = new Date(date)
+  const d = parseDateStr(date)
   d.setDate(d.getDate() + days)
-  return d.toISOString().split('T')[0]
+  return toLocalDateStr(d)
 }
 
 export const daysBetween = (a, b) => {
   const msPerDay = 1000 * 60 * 60 * 24
-  return Math.round((new Date(b) - new Date(a)) / msPerDay)
+  return Math.round((parseDateStr(b) - parseDateStr(a)) / msPerDay)
 }
 
 // ── ESTADO DE PAGO ─────────────────────────────────────────
@@ -56,11 +81,9 @@ export const getMemberPaymentStatus = (member, payments) => {
   if (!memberPayments.length) {
     if (!member.start_date) return 'no_payment'
 
-    // Calcular fecha de vencimiento esperada según el plan
+    // Calcular fecha de vencimiento esperada según el plan (hora local)
     const planDays = member.plan?.duration_days || 30
-    const startDate = new Date(member.start_date + 'T12:00:00')
-    startDate.setDate(startDate.getDate() + planDays)
-    const expectedDueDate = startDate.toISOString().split('T')[0]
+    const expectedDueDate = addDays(member.start_date, planDays)
 
     const diff = daysBetween(today(), expectedDueDate)
 
@@ -150,49 +173,54 @@ export const getMeasurementDiff = (current, previous, key) => {
 }
 
 // ── RACHA ──────────────────────────────────────────────────
+// Ahora respeta la configuración del gimnasio (streakOptions):
+//   - closedWeekdays: días de la semana que el gym cierra (0=Dom ... 6=Sáb)
+//   - holidays:       fechas 'YYYY-MM-DD' de feriados
 // Reglas:
-// - Domingos: no cuentan, no rompen
-// - Sábados:  opcional, no rompe si no asiste
-// - L-V:      si no asiste, rompe la racha
-// - Hoy:      si aún no marcó hoy, la racha se calcula desde ayer
-//             para no mostrar 0 injustamente durante el día
-export const calculateStreak = (attendanceDates) => {
+//   - Si asistió un día: SIEMPRE cuenta (aunque sea día cerrado/feriado)
+//   - Día cerrado o feriado sin asistir: no rompe, no cuenta
+//   - Día hábil sin asistir: rompe la racha
+//   - Hoy sin marcar: se calcula desde ayer para no mostrar 0 durante el día
+// Si no se pasan opciones, default [0,6] = cerrado Dom y Sáb (compatible
+// con el comportamiento anterior, pero ahora Sáb/Dom asistidos SÍ cuentan).
+
+const normalizeStreakOptions = (options = {}) => ({
+  closedWeekdays: Array.isArray(options.closedWeekdays) ? options.closedWeekdays : [0, 6],
+  holidays: new Set(
+    (Array.isArray(options.holidays) ? options.holidays : []).map(h => String(h).slice(0, 10))
+  ),
+})
+
+// ¿Es día de descanso (gym cerrado o feriado)? — usado también por el calendario
+export const isRestDay = (dateStr, options = {}) => {
+  const { closedWeekdays, holidays } = normalizeStreakOptions(options)
+  return closedWeekdays.includes(parseDateStr(dateStr).getDay()) || holidays.has(String(dateStr).slice(0, 10))
+}
+
+export const calculateStreak = (attendanceDates, options = {}) => {
   if (!attendanceDates?.length) return 0
+  const { closedWeekdays, holidays } = normalizeStreakOptions(options)
   const attended = new Set(attendanceDates.map(a => a.attended_date))
 
-  const todayStr  = new Date().toISOString().split('T')[0]
+  const todayStr    = today()
   const markedToday = attended.has(todayStr)
 
+  // Si aún no marcó hoy, empezamos desde ayer para no mostrar 0 injustamente
+  const check = parseDateStr(todayStr)
+  if (!markedToday) check.setDate(check.getDate() - 1)
+
   let streak = 0
-  let check  = new Date()
-
-  // Si hoy no está marcado y es día de semana (L-V),
-  // empezamos desde ayer para no mostrar 0 innecesariamente
-  if (!markedToday) {
-    const dow = check.getDay()
-    if (dow !== 0 && dow !== 6) {
-      check.setDate(check.getDate() - 1)
-    }
-  }
-
-  for (let i = 0; i < 365; i++) {
+  for (let i = 0; i < 366; i++) {
+    const dateStr = toLocalDateStr(check)
     const dow     = check.getDay()
-    const dateStr = check.toISOString().split('T')[0]
-
-    // Domingo: nunca cuenta, nunca rompe
-    if (dow === 0) {
-      check.setDate(check.getDate() - 1)
-      continue
-    }
+    const isRest  = closedWeekdays.includes(dow) || holidays.has(dateStr)
 
     if (attended.has(dateStr)) {
-      streak++
-    } else if (dow === 6) {
-      // Sábado sin asistir: no rompe
-    } else {
-      // Lunes-Viernes sin asistir: rompe
-      break
+      streak++                 // asistió: cuenta siempre
+    } else if (!isRest) {
+      break                    // día hábil sin asistir: rompe
     }
+    // día cerrado/feriado sin asistir: continúa sin romper
 
     check.setDate(check.getDate() - 1)
   }
