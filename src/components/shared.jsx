@@ -44,7 +44,7 @@ export function Toaster() {
   if (!toasts.length) return null
 
   return (
-    <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none">
+    <div className="fixed bottom-24 md:bottom-5 left-1/2 -translate-x-1/2 z-[100] flex flex-col gap-2 w-[calc(100%-2rem)] max-w-sm pointer-events-none">
       {toasts.map(t => {
         const s = TOAST_STYLES[t.type] || TOAST_STYLES.info
         const Icon = s.icon
@@ -59,6 +59,29 @@ export function Toaster() {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── SKELETON LOADERS ───────────────────────────────────────
+// Reemplazan al spinner genérico: la app "dibuja" su estructura
+// mientras carga y se siente mucho más rápida.
+export function Skeleton({ className = '' }) {
+  return <div className={`animate-pulse bg-gray-800/60 rounded-2xl ${className}`} />
+}
+
+export function PageSkeleton() {
+  return (
+    <div className="space-y-4 max-w-lg mx-auto animate-fade-in">
+      <Skeleton className="h-6 w-40" />
+      <Skeleton className="h-40 w-full" />
+      <div className="grid grid-cols-2 gap-3">
+        <Skeleton className="h-24" />
+        <Skeleton className="h-24" />
+      </div>
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-16 w-full" />
+      <Skeleton className="h-16 w-full" />
     </div>
   )
 }

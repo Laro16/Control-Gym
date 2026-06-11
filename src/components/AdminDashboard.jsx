@@ -10,7 +10,7 @@ import {
   markAllNotificationsRead, createNotification
 } from '../supabase'
 import { formatDate, today, getMemberPaymentStatus, daysBetween } from '../utils/helpers'
-import { Spinner, toast } from './shared'
+import { toast, PageSkeleton } from './shared'
 import { AdminOverview } from './AdminOverview'
 import { AdminMembers } from './AdminMembers'
 import { AdminPayments } from './AdminPayments'
@@ -356,7 +356,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
 
       {/* ── CONTENIDO ────────────────────────────────────── */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
-        {loading ? <Spinner /> : (
+        {loading ? <PageSkeleton /> : (
           <>
             {tab === 'overview' && (
               <AdminOverview

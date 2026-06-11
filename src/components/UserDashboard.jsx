@@ -11,7 +11,7 @@ import {
   markAllNotificationsRead, getPlans
 } from '../supabase'
 import { formatDate, today } from '../utils/helpers'
-import { Spinner } from './shared'
+import { PageSkeleton } from './shared'
 import { UserHome } from './UserHome'
 import { UserPayments } from './UserPayments'
 import { UserBody } from './UserBody'
@@ -79,6 +79,12 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     if (unread > prevNotifsCount.current) playNotifSound()
     prevNotifsCount.current = unread
   }, [unread])
+
+  const switchTab = (id) => {
+    setTab(id)
+    window.scrollTo({ top: 0 })
+    if (navigator.vibrate) navigator.vibrate(8) // feedback táctil sutil en Android
+  }
 
   const tabs = [
     { id: 'home',       label: 'Inicio',    icon: Home },
@@ -154,12 +160,12 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
         )}
       </header>
 
-      {/* BOTTOM NAV (mobile) / TOP NAV (desktop) */}
-      <nav className="lm-nav border-b border-gray-800 sticky top-[57px] z-30">
+      {/* TOP NAV — solo desktop */}
+      <nav className="hidden md:block lm-nav border-b border-gray-800 sticky top-[57px] z-30">
         <div className="max-w-2xl mx-auto px-4">
-          <div className="flex gap-1 py-1 overflow-x-auto no-scrollbar">
+          <div className="flex gap-1 py-1">
             {tabs.map(t => (
-              <button key={t.id} onClick={() => setTab(t.id)}
+              <button key={t.id} onClick={() => switchTab(t.id)}
                 className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all
                   ${tab === t.id ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20' : 'text-gray-400 hover:text-white hover:bg-gray-800 lm-tab-inactive'}`}>
                 <t.icon className="w-4 h-4" />{t.label}
@@ -169,8 +175,8 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
         </div>
       </nav>
 
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 py-6">
-        {loading ? <Spinner /> : (
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 pt-6 pb-28 md:pb-6">
+        {loading ? <PageSkeleton /> : (
           <>
             {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} attendance={attendance} streakOptions={streakOptions} onNavigate={setTab} />}
             {tab === 'payments' && <UserPayments payments={payments} member={member} onRefresh={loadData} />}
@@ -180,6 +186,34 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
           </>
         )}
       </main>
+
+      {/* BOTTOM NAV — solo móvil, estilo app nativa */}
+      <nav
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 lm-nav"
+        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      >
+        <div className="grid grid-cols-5 max-w-2xl mx-auto">
+          {tabs.map(t => {
+            const active = tab === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => switchTab(t.id)}
+                className="relative flex flex-col items-center justify-center gap-0.5 py-2 active:scale-90 transition-transform"
+              >
+                <span className={`absolute top-0 h-0.5 w-8 rounded-full transition-all ${active ? 'bg-brand-500' : 'bg-transparent'}`} />
+                <t.icon
+                  className={`w-5 h-5 transition-colors ${active ? 'text-brand-400' : 'text-gray-500'}`}
+                  strokeWidth={active ? 2.4 : 2}
+                />
+                <span className={`text-[10px] font-medium transition-colors ${active ? 'text-brand-400' : 'text-gray-600'}`}>
+                  {t.label}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      </nav>
     </div>
   )
 }
