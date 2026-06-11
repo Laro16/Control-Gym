@@ -7,9 +7,9 @@ import { playNotifSound } from '../App'
 import {
   supabase,
   getMembers, getPayments, getPlans, getNotifications,
-  markAllNotificationsRead, createNotification
+  markAllNotificationsRead
 } from '../supabase'
-import { formatDate, today, getMemberPaymentStatus, daysBetween } from '../utils/helpers'
+import { formatDate } from '../utils/helpers'
 import { toast, PageSkeleton } from './shared'
 import { AdminOverview } from './AdminOverview'
 import { AdminMembers } from './AdminMembers'
@@ -50,64 +50,14 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
     setNotifications(n.data || [])
     setLoading(false)
 
-    // ── NOTIFICACIONES AUTOMÁTICAS ─────────────────────────
-    // Genera notificaciones para miembros con cuota vencida o próxima a vencer
-    // Solo crea una si no existe ya una del mismo tipo en los últimos 3 días
-    await generateAutoNotifications(members, payments)
+    // Las notificaciones automáticas (cuota vencida / por vencer) ahora
+    // las genera Supabase cada mañana con pg_cron — ver fase-final.sql.
 
     // Cargar logo del gimnasio (el propio del admin)
     const { data: gymData } = await supabase
       .from('gyms').select('logo_url').eq('id', profile.gym_id).single()
     if (gymData?.logo_url) setGymLogo(gymData.logo_url)
   }, [profile.id])
-
-  // Genera notificaciones automáticas para usuarios
-  async function generateAutoNotifications(members, payments) {
-    const existingNotifs = await getNotifications(null) // obtenemos todas para verificar duplicados
-    const recentNotifKeys = new Set(
-      (existingNotifs.data || [])
-        .filter(n => daysBetween(n.created_at?.slice(0,10), today()) < 3)
-        .map(n => `${n.profile_id}-${n.type}`)
-    )
-
-    for (const member of members) {
-      const profileId = member.profile_id
-      if (!profileId) continue
-
-      const st = getMemberPaymentStatus(member, payments)
-
-      // Cuota vencida
-      if (st === 'overdue') {
-        const key = `${profileId}-payment_overdue`
-        if (!recentNotifKeys.has(key)) {
-          await createNotification({
-            profile_id: profileId,
-            type: 'payment_overdue',
-            title: '⚠️ Tu cuota está vencida',
-            message: 'Tu mensualidad está vencida. Por favor realiza tu pago para continuar disfrutando del gimnasio.',
-          })
-          recentNotifKeys.add(key)
-        }
-      }
-
-      // Cuota próxima a vencer (menos de 5 días)
-      if (st === 'due_soon') {
-        const key = `${profileId}-payment_due`
-        if (!recentNotifKeys.has(key)) {
-          const memberPayments = payments.filter(p => p.member_id === member.id && p.status === 'approved')
-          const last = memberPayments[0]
-          const daysLeft = last ? daysBetween(today(), last.due_date) : 0
-          await createNotification({
-            profile_id: profileId,
-            type: 'payment_due',
-            title: '🔔 Tu cuota vence pronto',
-            message: `Tu mensualidad vence en ${daysLeft} día${daysLeft !== 1 ? 's' : ''}. Recuerda realizar tu pago a tiempo.`,
-          })
-          recentNotifKeys.add(key)
-        }
-      }
-    }
-  }
 
   useEffect(() => { loadData() }, [loadData])
 
