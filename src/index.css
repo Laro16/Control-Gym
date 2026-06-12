@@ -4,6 +4,12 @@
 
 /* ── Paleta de marca por defecto (naranja). Cada gimnasio la
      sobreescribe en runtime con su primary_color (utils/theme.js) ── */
+/* Sin pull-to-refresh nativo del navegador: usamos el nuestro,
+   que funciona igual en navegador y en la PWA instalada */
+html, body {
+  overscroll-behavior-y: none;
+}
+
 :root {
   --brand-50:  255 247 237;
   --brand-100: 255 237 213;
