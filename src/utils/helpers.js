@@ -1,3 +1,5 @@
+import { getBrandHex, getBrandRGB } from './theme'
+
 // jsPDF y XLSX se cargan bajo demanda (import dinámico) dentro de
 // las funciones de exportación: pesan ~600KB y solo los necesita el
 // admin cuando exporta. Así el bundle inicial es mucho más liviano.
@@ -238,7 +240,7 @@ export const generatePaymentPDF = async (payment, member) => {
   const gymName = import.meta.env.VITE_GYM_NAME || 'Mi Gimnasio'
 
   // Header
-  doc.setFillColor(249, 115, 22)
+  doc.setFillColor(...getBrandRGB())
   doc.rect(0, 0, 210, 40, 'F')
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(24)
@@ -297,7 +299,7 @@ export const generatePaymentPDF = async (payment, member) => {
   // Si es efectivo, mostrar nota grande
   if (payment.payment_method === 'cash') {
     y += 6
-    doc.setFillColor(249, 115, 22)
+    doc.setFillColor(...getBrandRGB())
     doc.roundedRect(14, y, 182, 18, 3, 3, 'F')
     doc.setTextColor(255, 255, 255)
     doc.setFontSize(13)
@@ -350,7 +352,7 @@ export const generatePaymentHistoryPDF = async (payments, member) => {
   const doc = new jsPDF()
   const gymName = import.meta.env.VITE_GYM_NAME || 'Mi Gimnasio'
 
-  doc.setFillColor(249, 115, 22)
+  doc.setFillColor(...getBrandRGB())
   doc.rect(0, 0, 210, 30, 'F')
   doc.setTextColor(255, 255, 255)
   doc.setFontSize(16)
@@ -369,7 +371,7 @@ export const generatePaymentHistoryPDF = async (payments, member) => {
       p.payment_method === 'cash' ? 'Efectivo' : p.payment_method === 'transfer' ? 'Transferencia' : 'Depósito',
       p.status === 'approved' ? 'Aprobado' : p.status === 'pending' ? 'Pendiente' : 'Rechazado',
     ]),
-    headStyles: { fillColor: [249, 115, 22], textColor: 255 },
+    headStyles: { fillColor: getBrandRGB(), textColor: 255 },
     alternateRowStyles: { fillColor: [245, 245, 245] },
   })
 
@@ -445,7 +447,7 @@ export const generateReceiptImage = (payment, member, gymName) => {
   ctx.fillRect(0, 0, W, H)
 
   // Banda superior naranja
-  ctx.fillStyle = '#f97316'
+  ctx.fillStyle = getBrandHex()
   ctx.fillRect(0, 0, W, 90)
 
   // Nombre del gimnasio
