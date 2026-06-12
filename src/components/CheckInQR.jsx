@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
-import { QrCode, Printer, Download, RefreshCw, Check, Copy, AlertCircle } from 'lucide-react'
+import { QrCode, Printer, Download, RefreshCw, Check, Copy, AlertCircle, MonitorSmartphone } from 'lucide-react'
 import { getMyGym, updateGym } from '../supabase'
 import { Spinner } from './shared'
 
@@ -17,7 +17,19 @@ export function CheckInQR({ profile }) {
   const [busy, setBusy]       = useState(false)
   const [copied, setCopied]   = useState(false)
   const [confirmRegen, setConfirmRegen] = useState(false)
+  const [kiosk, setKiosk] = useState(false)
   const qrRef = useRef(null)
+
+  const enterKiosk = () => {
+    setKiosk(true)
+    // Pantalla completa real si el dispositivo lo permite (tablet en recepción)
+    document.documentElement.requestFullscreen?.().catch(() => {})
+  }
+
+  const exitKiosk = () => {
+    setKiosk(false)
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+  }
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -105,8 +117,22 @@ export function CheckInQR({ profile }) {
       </div>
 
       <div className="card flex flex-col items-center text-center">
-        <div ref={qrRef} className="bg-white p-4 rounded-2xl">
-          <QRCodeCanvas value={checkinUrl} size={220} level="M" includeMargin={false} />
+        <div className="relative">
+          <span
+            className="absolute -inset-3 rounded-3xl bg-brand-500/15 animate-ping pointer-events-none"
+            style={{ animationDuration: '3s' }}
+          />
+          <span className="absolute -inset-3 rounded-3xl border border-brand-500/25 pointer-events-none" />
+          <div ref={qrRef} className="relative bg-white p-4 rounded-2xl">
+            <QRCodeCanvas value={checkinUrl} size={220} level="H" includeMargin={false} />
+            {gym.logo_url && (
+              <img
+                src={gym.logo_url}
+                alt=""
+                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 rounded-xl object-cover ring-4 ring-white shadow"
+              />
+            )}
+          </div>
         </div>
         <p className="font-semibold text-white mt-4">{gym.name}</p>
         <p className="text-xs text-gray-500">Escanea para registrar tu asistencia</p>
@@ -118,7 +144,13 @@ export function CheckInQR({ profile }) {
           <button className="btn-secondary flex-1 min-w-[140px]" onClick={handleDownload}>
             <Download className="w-4 h-4" /> Descargar PNG
           </button>
+          <button className="btn-secondary flex-1 min-w-[140px]" onClick={enterKiosk}>
+            <MonitorSmartphone className="w-4 h-4" /> Pantalla de recepción
+          </button>
         </div>
+        <p className="text-[11px] text-gray-600 mt-2">
+          💡 ¿Tienes una tablet en recepción? Usa "Pantalla de recepción" y déjala fija mostrando el QR.
+        </p>
       </div>
 
       <div className="card space-y-3">
@@ -153,6 +185,46 @@ export function CheckInQR({ profile }) {
           </button>
         )}
       </div>
+
+      {/* ── MODO PANTALLA DE RECEPCIÓN (kiosko) ────────── */}
+      {kiosk && (
+        <div
+          className="fixed inset-0 z-[95] bg-gray-950 flex flex-col items-center justify-center gap-7 animate-fade-in cursor-pointer select-none"
+          onClick={exitKiosk}
+        >
+          {gym.logo_url && (
+            <img src={gym.logo_url} alt="" className="w-20 h-20 rounded-2xl object-cover shadow-lg" />
+          )}
+          <h1 className="font-display text-4xl sm:text-6xl tracking-wider text-white text-center px-6 leading-none">
+            {gym.name}
+          </h1>
+
+          <div className="relative my-2">
+            <span
+              className="absolute -inset-5 rounded-[2.5rem] bg-brand-500/20 animate-ping pointer-events-none"
+              style={{ animationDuration: '2.8s' }}
+            />
+            <span className="absolute -inset-5 rounded-[2.5rem] border-2 border-brand-500/30 pointer-events-none" />
+            <div className="relative bg-white p-6 rounded-[2rem] shadow-2xl">
+              <QRCodeCanvas value={checkinUrl} size={300} level="H" includeMargin={false} />
+              {gym.logo_url && (
+                <img
+                  src={gym.logo_url}
+                  alt=""
+                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-xl object-cover ring-4 ring-white shadow"
+                />
+              )}
+            </div>
+          </div>
+
+          <p className="text-brand-400 font-bold text-xl sm:text-2xl text-center px-6">
+            Escanea para marcar tu asistencia
+          </p>
+          <p className="text-gray-600 text-sm">y mantén tu racha encendida 🔥</p>
+
+          <p className="text-gray-700 text-xs absolute bottom-5">Toca la pantalla para salir</p>
+        </div>
+      )}
     </div>
   )
 }

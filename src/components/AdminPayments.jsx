@@ -25,7 +25,7 @@ import {
   generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner } from './shared'
+import { Modal, ConfirmModal, Spinner, EmptyState } from './shared'
 
 // ── ADMIN PAYMENTS ─────────────────────────────────────────
 export function AdminPayments({ payments, onRefresh, profile }) {
@@ -138,10 +138,11 @@ export function AdminPayments({ payments, onRefresh, profile }) {
           )
         })}
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            No hay pagos en esta categoría
-          </div>
+          <EmptyState
+            icon={CreditCard}
+            title="No hay pagos en esta categoría"
+            subtitle="Cuando tus miembros registren pagos o tú los agregues, aparecerán aquí para su revisión"
+          />
         )}
       </div>
 

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { toast } from './shared'
+import { toast, EmptyState } from './shared'
 import { TrendingUp, TrendingDown, Camera, ChevronDown, ChevronUp, Minus } from 'lucide-react'
 import { uploadProgressPhoto, createProgressPhoto } from '../supabase'
 import {
@@ -418,13 +418,11 @@ export function UserBody({ measurements, photos, member, onRefresh }) {
               ))}
             </>
           ) : (
-            <div className="text-center py-14 text-gray-500">
-              <TrendingUp className="w-12 h-12 mx-auto mb-3 opacity-20" />
-              <p className="font-medium">Sin medidas registradas aún</p>
-              <p className="text-xs mt-1 text-gray-600">
-                El administrador las registrará en tu próxima visita
-              </p>
-            </div>
+            <EmptyState
+              icon={TrendingUp}
+              title="Tu progreso empieza pronto"
+              subtitle="Pide en recepción que registren tu primera medición — aquí verás tu evolución de peso y medidas con gráficas"
+            />
           )}
         </div>
       )}

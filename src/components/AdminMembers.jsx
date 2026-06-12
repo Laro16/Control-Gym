@@ -25,7 +25,7 @@ import {
   generateMasterExcel, today, addDays, calculateStreak
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner } from './shared'
+import { Modal, ConfirmModal, Spinner , EmptyState } from './shared'
 
 // ── ADMIN MEMBERS ──────────────────────────────────────────
 export function AdminMembers({ members, plans, onRefresh, gymId }) {
@@ -95,10 +95,11 @@ export function AdminMembers({ members, plans, onRefresh, gymId }) {
           </div>
         ))}
         {filtered.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <Users className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            No se encontraron miembros
-          </div>
+          <EmptyState
+            icon={Users}
+            title="No se encontraron miembros"
+            subtitle="Prueba con otro nombre o agrega un miembro nuevo con el botón +"
+          />
         )}
       </div>
 
@@ -184,7 +185,9 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
           {measurements.slice(0, 6).map((m, i) => (
             <MeasurementCard key={m.id} current={m} previous={measurements[i + 1]} />
           ))}
-          {measurements.length === 0 && <p className="text-gray-500 text-sm">Sin medidas registradas</p>}
+          {measurements.length === 0 && (
+            <EmptyState compact title="Sin medidas registradas" subtitle="Usa el botón de arriba para registrar la primera medición de este miembro" />
+          )}
           <Modal open={showMeasForm} onClose={() => setShowMeasForm(false)} title="Nueva medición">
             <MeasurementForm memberId={member.id} onSave={async (data) => {
               await createMeasurement({ ...data, member_id: member.id })
@@ -209,7 +212,9 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
               </div>
             ))}
           </div>
-          {photos.length === 0 && <p className="text-gray-500 text-sm">Sin fotos de progreso</p>}
+          {photos.length === 0 && (
+            <EmptyState compact title="Sin fotos de progreso" subtitle="Las fotos que suba el miembro o registres tú aparecerán aquí" />
+          )}
         </div>
       )}
 

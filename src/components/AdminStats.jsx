@@ -1,4 +1,6 @@
 import { getBrandHex } from '../utils/theme'
+import { BarChart3 } from 'lucide-react'
+import { EmptyState } from './shared'
 import { useMemo } from 'react'
 import { TrendingUp, Users, CreditCard, Calendar, Activity } from 'lucide-react'
 import { formatCurrency, getMemberPaymentStatus } from '../utils/helpers'
@@ -38,8 +40,13 @@ function BarChart({ data, color }) {
 function DonutChart({ segments }) {
   const total = segments.reduce((a, s) => a + s.value, 0)
   if (total === 0) return (
-    <div className="flex items-center justify-center h-40 text-gray-600 text-sm">
-      Sin datos para mostrar
+    <div className="flex items-center justify-center h-40">
+      <EmptyState
+        compact
+        icon={BarChart3}
+        title="Sin datos todavía"
+        subtitle="Cuando haya pagos y asistencias verás las gráficas aquí"
+      />
     </div>
   )
 

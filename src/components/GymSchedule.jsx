@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { CalendarDays, Plus, Trash2, Check, Save, Palette } from 'lucide-react'
 import { getMyGym, updateGym } from '../supabase'
 import { applyGymTheme } from '../utils/theme'
-import { Spinner } from './shared'
+import { Spinner, EmptyState } from './shared'
 import { formatDate } from '../utils/helpers'
 
 const WEEKDAYS = [
@@ -144,7 +144,12 @@ export function GymSchedule({ profile }) {
         <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Festivos / cierres puntuales</p>
 
         {holidays.length === 0 ? (
-          <p className="text-sm text-gray-500 py-1">Aún no agregas festivos.</p>
+          <EmptyState
+            compact
+            icon={CalendarDays}
+            title="Aún no agregas festivos"
+            subtitle="Los feriados protegen la racha de tus miembros: si el gym cierra ese día, nadie pierde su racha"
+          />
         ) : (
           <div className="space-y-2">
             {holidays.map(h => (

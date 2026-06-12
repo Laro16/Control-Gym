@@ -26,7 +26,7 @@ import {
   toLocalDateStr,
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner, toast } from './shared'
+import { Modal, ConfirmModal, Spinner, toast, EmptyState } from './shared'
 
 // ── USER PAYMENTS ──────────────────────────────────────────
 export function UserPayments({ payments, member, onRefresh }) {
@@ -156,11 +156,11 @@ export function UserPayments({ payments, member, onRefresh }) {
         })}
 
         {payments.length === 0 && (
-          <div className="text-center py-12 text-gray-500">
-            <CreditCard className="w-10 h-10 mx-auto mb-2 opacity-30" />
-            <p>Sin historial de pagos</p>
-            <p className="text-xs mt-1">Registra tu primer pago con el botón de arriba</p>
-          </div>
+          <EmptyState
+            icon={CreditCard}
+            title="Aún no tienes pagos registrados"
+            subtitle="Registra tu primer pago con el botón de arriba — tu historial y comprobantes vivirán aquí"
+          />
         )}
       </div>
 

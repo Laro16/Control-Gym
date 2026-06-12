@@ -159,6 +159,28 @@ export function PullToRefresh({ onRefresh, children }) {
   )
 }
 
+// ── EMPTY STATE ────────────────────────────────────────────
+// Estado vacío con personalidad: ícono en círculo del color del
+// gimnasio + título + mensaje cálido + acción opcional.
+export function EmptyState({ icon: Icon, title, subtitle, action, onAction, compact = false }) {
+  return (
+    <div className={`text-center ${compact ? 'py-6' : 'py-12'} animate-fade-in`}>
+      {Icon && (
+        <div className={`${compact ? 'w-12 h-12' : 'w-16 h-16'} mx-auto mb-3 rounded-full bg-brand-500/10 border border-brand-500/15 flex items-center justify-center`}>
+          <Icon className={`${compact ? 'w-5 h-5' : 'w-7 h-7'} text-brand-400/70`} />
+        </div>
+      )}
+      <p className="font-medium text-gray-300 text-sm">{title}</p>
+      {subtitle && (
+        <p className="text-xs mt-1.5 text-gray-500 max-w-xs mx-auto leading-relaxed">{subtitle}</p>
+      )}
+      {action && (
+        <button onClick={onAction} className="btn-primary mt-4 mx-auto">{action}</button>
+      )}
+    </div>
+  )
+}
+
 // ── SKELETON LOADERS ───────────────────────────────────────
 // Reemplazan al spinner genérico: la app "dibuja" su estructura
 // mientras carga y se siente mucho más rápida.
