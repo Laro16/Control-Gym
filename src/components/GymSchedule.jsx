@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
-import { CalendarDays, Plus, Trash2, Check, Save } from 'lucide-react'
+import { CalendarDays, Plus, Trash2, Check, Save, Palette } from 'lucide-react'
 import { getMyGym, updateGym } from '../supabase'
+import { applyGymTheme } from '../utils/theme'
 import { Spinner } from './shared'
 import { formatDate } from '../utils/helpers'
 
@@ -18,16 +19,30 @@ export function GymSchedule({ profile }) {
   const [holidays, setHolidays] = useState([])
   const [newDate, setNewDate]   = useState('')
   const [newLabel, setNewLabel] = useState('')
+  const [color, setColor]       = useState('#f97316')
 
   const load = useCallback(async () => {
     setLoading(true)
     const { data } = await getMyGym(profile.gym_id)
     setClosed(data?.closed_weekdays || [])
     setHolidays(Array.isArray(data?.holidays) ? data.holidays : [])
+    setColor(data?.primary_color || '#f97316')
     setLoading(false)
   }, [profile.gym_id])
 
   useEffect(() => { load() }, [load])
+
+  const COLOR_PRESETS = [
+    '#f97316', '#ef4444', '#e11d48', '#a855f7',
+    '#3b82f6', '#0ea5e9', '#10b981', '#84cc16',
+    '#eab308', '#64748b',
+  ]
+
+  const changeColor = (hex) => {
+    setSaved(false)
+    setColor(hex)
+    applyGymTheme(hex) // vista previa en vivo en toda la app
+  }
 
   const toggleDay = (i) => {
     setSaved(false)
@@ -53,6 +68,7 @@ export function GymSchedule({ profile }) {
     const { error } = await updateGym(profile.gym_id, {
       closed_weekdays: closed,
       holidays,
+      primary_color: color,
     })
     setSaving(false)
     if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500) }
@@ -70,6 +86,38 @@ export function GymSchedule({ profile }) {
         <p className="text-gray-500 text-sm mt-1">
           En estos días la racha de tus miembros nunca se rompe, aunque no asistan.
         </p>
+      </div>
+
+      {/* ── COLOR DEL GIMNASIO ─────────────────────────── */}
+      <div className="card">
+        <div className="flex items-center gap-2 mb-1">
+          <Palette className="w-4 h-4 text-brand-400" />
+          <p className="font-semibold text-white text-sm">Color de tu gimnasio</p>
+        </div>
+        <p className="text-xs text-gray-500 mb-3">
+          Toda la app (la tuya y la de tus miembros) usará este color. La vista previa es inmediata — guarda para aplicarlo.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {COLOR_PRESETS.map(c => (
+            <button
+              key={c}
+              onClick={() => changeColor(c)}
+              className={`w-9 h-9 rounded-full transition-all active:scale-90
+                ${color.toLowerCase() === c ? 'ring-2 ring-offset-2 ring-offset-gray-900 ring-white scale-110' : 'opacity-80 hover:opacity-100'}`}
+              style={{ backgroundColor: c }}
+              title={c}
+            />
+          ))}
+          <label className="w-9 h-9 rounded-full border-2 border-dashed border-gray-600 flex items-center justify-center cursor-pointer hover:border-gray-400 transition-colors relative overflow-hidden">
+            <span className="text-gray-400 text-lg leading-none">+</span>
+            <input
+              type="color"
+              value={color}
+              onChange={e => changeColor(e.target.value)}
+              className="absolute inset-0 opacity-0 cursor-pointer"
+            />
+          </label>
+        </div>
       </div>
 
       <div className="card space-y-3">

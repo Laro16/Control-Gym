@@ -5,6 +5,7 @@ import {
   supabase, markAttendance, removeAttendance, createNotification
 } from '../supabase'
 import { calculateStreak, today, getMemberPaymentStatus, daysBetween, addDays, parseDateStr, isRestDay } from '../utils/helpers'
+import { useCountUp } from './shared'
 
 // ── LOGROS POR GÉNERO ─────────────────────────────────────
 const getAchievements = (gender) => {
@@ -168,7 +169,8 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
   const gender      = profile?.gender || 'male'
   const ACHIEVEMENTS = getAchievements(gender)
 
-  const streak      = calculateStreak(attendance, streakOptions)
+  const streak        = calculateStreak(attendance, streakOptions)
+  const displayStreak = useCountUp(streak)
   const bestStreak  = member?.best_streak || 0
   const attended    = new Set(attendance.map(a => a.attended_date))
   const todayStr    = today()
@@ -273,15 +275,15 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
             <Flame
               className={`w-14 h-14 transition-all duration-500 ${
                 markedToday
-                  ? 'text-orange-400 drop-shadow-[0_0_12px_rgba(251,146,60,0.7)]'
+                  ? 'text-brand-400 drop-shadow-[0_0_12px_rgb(var(--brand-400)/0.7)] animate-flicker'
                   : streak > 0 ? 'text-gray-500' : 'text-gray-700'
               }`}
               fill={markedToday ? 'currentColor' : 'none'}
             />
           </div>
 
-          <div className="text-7xl font-display tracking-wider text-brand-400 leading-none">
-            {streak}
+          <div className="text-7xl font-display tracking-wider text-brand-400 leading-none tabular-nums">
+            {displayStreak}
           </div>
           <p className="text-gray-300 font-medium mt-1">días de racha</p>
           <p className="text-sm mt-3 text-gray-400">
@@ -307,8 +309,8 @@ export function UserStreak({ attendance, member, payments, onRefresh, profile, s
               </p>
               <div className="mt-1.5 bg-gray-700 rounded-full h-1.5">
                 <div
-                  className="bg-brand-500 h-1.5 rounded-full transition-all"
-                  style={{ width: `${Math.min(100, (streak / nextAchievement.days) * 100)}%` }}
+                  className="bg-brand-500 h-1.5 rounded-full transition-all duration-150"
+                  style={{ width: `${Math.min(100, (displayStreak / nextAchievement.days) * 100)}%` }}
                 />
               </div>
               <p className="text-[10px] text-gray-600 mt-1">

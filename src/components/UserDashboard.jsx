@@ -12,6 +12,7 @@ import {
 } from '../supabase'
 import { formatDate, today } from '../utils/helpers'
 import { PageSkeleton } from './shared'
+import { applyGymTheme } from '../utils/theme'
 import { UserHome } from './UserHome'
 import { UserPayments } from './UserPayments'
 import { UserBody } from './UserBody'
@@ -63,8 +64,9 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
 
     // Datos del gimnasio del miembro: logo + config de racha
     const { data: gymData } = await supabase
-      .from('gyms').select('logo_url, closed_weekdays, holidays').eq('id', profile.gym_id).single()
+      .from('gyms').select('logo_url, closed_weekdays, holidays, primary_color').eq('id', profile.gym_id).single()
     if (gymData?.logo_url) setGymLogo(gymData.logo_url)
+    applyGymTheme(gymData?.primary_color)
     if (gymData) setStreakOptions({
       closedWeekdays: gymData.closed_weekdays || [0, 6],
       holidays: Array.isArray(gymData.holidays) ? gymData.holidays : [],

@@ -1,3 +1,4 @@
+import { getBrandHex } from '../utils/theme'
 import { useMemo } from 'react'
 import { TrendingUp, Users, CreditCard, Calendar, Activity } from 'lucide-react'
 import { formatCurrency, getMemberPaymentStatus } from '../utils/helpers'
@@ -6,7 +7,8 @@ import { formatCurrency, getMemberPaymentStatus } from '../utils/helpers'
 const MES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic']
 
 // ── GRÁFICA DE BARRAS (ingresos por mes) ──────────────────
-function BarChart({ data, color = '#f97316' }) {
+function BarChart({ data, color }) {
+  color = color || getBrandHex()
   const max = Math.max(...data.map(d => d.value), 1)
   return (
     <div className="flex items-end justify-between gap-2 h-40 pt-4">
@@ -166,7 +168,7 @@ export function AdminStats({ members, payments }) {
     const active = members.filter(m => m.status === 'active').length
     const inactive = members.filter(m => m.status !== 'active').length
     return [
-      { label: 'Activos',   value: active,   color: '#f97316' },
+      { label: 'Activos',   value: active,   color: getBrandHex() },
       { label: 'Inactivos', value: inactive, color: '#475569' },
     ].filter(s => s.value > 0)
   }, [members])

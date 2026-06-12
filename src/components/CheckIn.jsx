@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { CheckCircle, Flame, AlertCircle, XCircle, Dumbbell, LogIn } from 'lucide-react'
 import { supabase, getMyGym, getAttendance, markAttendance } from '../supabase'
 import { today, calculateStreak, getMemberPaymentStatus } from '../utils/helpers'
+import { applyGymTheme } from '../utils/theme'
 import Login from './Login'
 
 // Estados posibles del check-in
@@ -24,6 +25,7 @@ export function CheckIn({ code, profile, onExit }) {
         if (cancelled) return
         if (!gym) { setState('error'); return }
         setGymName(gym.name)
+        applyGymTheme(gym.primary_color)
 
         if (gym.checkin_code !== code) { setState('wrong_gym'); return }
 
@@ -77,6 +79,7 @@ export function CheckIn({ code, profile, onExit }) {
             .eq('id', member.id)
         }
 
+        if (navigator.vibrate) navigator.vibrate([35, 50, 35]) // doble pulso de celebración
         setState('success')
       } catch {
         if (!cancelled) setState('error')

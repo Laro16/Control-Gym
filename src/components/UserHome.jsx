@@ -8,6 +8,7 @@ import {
   formatDate, formatCurrency, getMemberPaymentStatus,
   paymentStatusLabel, calculateStreak, today, daysBetween
 } from '../utils/helpers'
+import { useCountUp } from './shared'
 import { getAnnouncements } from '../supabase'
 
 function getGreeting() {
@@ -60,7 +61,8 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
       setAnnouncements(valid.slice(0, 3)) // máximo 3 en el inicio
     })
   }, [])
-  const streak      = calculateStreak(attendance || [], streakOptions)
+  const streak        = calculateStreak(attendance || [], streakOptions)
+  const displayStreak = useCountUp(streak, 700)
   const todayStr    = today()
   const markedToday = (attendance || []).some(a => a.attended_date === todayStr)
   const greeting    = getGreeting()
@@ -123,13 +125,13 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
             <Flame
               className={`w-10 h-10 transition-all duration-300 ${
                 markedToday
-                  ? 'text-orange-400 drop-shadow-[0_0_8px_rgba(251,146,60,0.8)]'
+                  ? 'text-brand-400 drop-shadow-[0_0_8px_rgb(var(--brand-400)/0.8)] animate-flicker'
                   : 'text-gray-600'
               }`}
               fill={markedToday ? 'currentColor' : 'none'}
             />
-            <span className={`text-xs font-bold ${markedToday ? 'text-orange-400' : 'text-gray-600'}`}>
-              {streak} días
+            <span className={`text-xs font-bold tabular-nums ${markedToday ? 'text-brand-400' : 'text-gray-600'}`}>
+              {displayStreak} días
             </span>
           </button>
         </div>

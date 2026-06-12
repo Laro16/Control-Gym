@@ -11,6 +11,7 @@ import {
 } from '../supabase'
 import { formatDate } from '../utils/helpers'
 import { toast, PageSkeleton } from './shared'
+import { applyGymTheme } from '../utils/theme'
 import { AdminOverview } from './AdminOverview'
 import { AdminMembers } from './AdminMembers'
 import { AdminPayments } from './AdminPayments'
@@ -55,8 +56,9 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
 
     // Cargar logo del gimnasio (el propio del admin)
     const { data: gymData } = await supabase
-      .from('gyms').select('logo_url').eq('id', profile.gym_id).single()
+      .from('gyms').select('logo_url, primary_color').eq('id', profile.gym_id).single()
     if (gymData?.logo_url) setGymLogo(gymData.logo_url)
+    applyGymTheme(gymData?.primary_color)
   }, [profile.id])
 
   useEffect(() => { loadData() }, [loadData])

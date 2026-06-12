@@ -285,8 +285,8 @@ function ProgressChart({ measurements }) {
       <svg viewBox={`0 0 ${W} ${H}`} className="w-full select-none" style={{ touchAction: 'manipulation' }}>
         <defs>
           <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%"  stopColor="#f97316" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#f97316" stopOpacity="0" />
+            <stop offset="0%"  style={{ stopColor: 'var(--brand-hex)' }} stopOpacity="0.25" />
+            <stop offset="100%" style={{ stopColor: 'var(--brand-hex)' }} stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -300,7 +300,7 @@ function ProgressChart({ measurements }) {
 
         {/* Área + línea */}
         <path d={areaPath} fill="url(#chartFill)" />
-        <polyline points={linePoints} fill="none" stroke="#f97316" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        <polyline points={linePoints} fill="none" style={{ stroke: 'var(--brand-hex)' }} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
 
         {/* Puntos (con zona de toque amplia) */}
         {data.map((d, i) => (
@@ -309,8 +309,11 @@ function ProgressChart({ measurements }) {
             <circle
               cx={x(i)} cy={y(d.value)}
               r={i === sel ? 5 : 3.5}
-              fill={i === sel ? '#f97316' : '#1f2937'}
-              stroke="#f97316" strokeWidth="2"
+              style={{
+                fill: i === sel ? 'var(--brand-hex)' : '#1f2937',
+                stroke: 'var(--brand-hex)',
+              }}
+              strokeWidth="2"
             />
           </g>
         ))}
