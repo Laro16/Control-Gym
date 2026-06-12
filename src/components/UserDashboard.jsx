@@ -11,7 +11,7 @@ import {
   markAllNotificationsRead, getPlans
 } from '../supabase'
 import { formatDate, today } from '../utils/helpers'
-import { PageSkeleton } from './shared'
+import { PageSkeleton, PullToRefresh } from './shared'
 import { applyGymTheme } from '../utils/theme'
 import { UserHome } from './UserHome'
 import { UserPayments } from './UserPayments'
@@ -177,6 +177,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
         </div>
       </nav>
 
+      <PullToRefresh onRefresh={loadData}>
       <main className="flex-1 max-w-2xl mx-auto w-full px-4 pt-6 pb-28 md:pb-6">
         {loading ? <PageSkeleton /> : (
           <>
@@ -188,6 +189,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
           </>
         )}
       </main>
+      </PullToRefresh>
 
       {/* BOTTOM NAV — solo móvil, estilo app nativa */}
       <nav

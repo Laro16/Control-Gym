@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { X, Check, CheckCircle, AlertCircle, Info } from 'lucide-react'
+import { useState, useEffect, useRef } from 'react'
+import { X, Check, CheckCircle, AlertCircle, Info, RefreshCw } from 'lucide-react'
 import { paymentStatusLabel } from '../utils/helpers'
 
 // ── TOASTS ─────────────────────────────────────────────────
@@ -59,6 +59,102 @@ export function Toaster() {
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ── COUNT-UP ───────────────────────────────────────────────
+// Anima un número de 0 hasta su valor (ease-out). Respeta la
+// preferencia de "reducir movimiento" del sistema del usuario.
+export function useCountUp(target, duration = 900) {
+  const [value, setValue] = useState(target || 0)
+
+  useEffect(() => {
+    const reduce = window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches
+    if (!target || target <= 0 || reduce) { setValue(target || 0); return }
+
+    let raf, start
+    const tick = (t) => {
+      if (start === undefined) start = t
+      const p = Math.min(1, (t - start) / duration)
+      const eased = 1 - Math.pow(1 - p, 3)
+      setValue(Math.round(eased * target))
+      if (p < 1) raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [target, duration])
+
+  return value
+}
+
+// ── PULL TO REFRESH ────────────────────────────────────────
+// Jalar hacia abajo desde arriba de la página para recargar datos.
+// Esencial en la PWA instalada: a pantalla completa no hay botón de
+// recargar del navegador. Solo se activa en pantallas táctiles.
+const PTR_THRESHOLD = 70   // px para disparar
+const PTR_MAX       = 110  // px máximo de arrastre visual
+
+export function PullToRefresh({ onRefresh, children }) {
+  const [pull, setPull]             = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
+  const startY   = useRef(null)
+  const buzzed   = useRef(false)
+
+  const onTouchStart = (e) => {
+    if (refreshing) return
+    // Solo si estamos exactamente arriba de la página
+    startY.current = window.scrollY <= 0 ? e.touches[0].clientY : null
+    buzzed.current = false
+  }
+
+  const onTouchMove = (e) => {
+    if (startY.current === null || refreshing) return
+    const dy = e.touches[0].clientY - startY.current
+    if (dy <= 0 || window.scrollY > 0) { setPull(0); return }
+    const damped = Math.min(PTR_MAX, dy * 0.45) // resistencia
+    setPull(damped)
+    if (damped >= PTR_THRESHOLD && !buzzed.current) {
+      buzzed.current = true
+      if (navigator.vibrate) navigator.vibrate(10)
+    }
+  }
+
+  const onTouchEnd = async () => {
+    if (startY.current === null || refreshing) return
+    startY.current = null
+    if (pull >= PTR_THRESHOLD) {
+      setRefreshing(true)
+      setPull(56) // mantener visible el spinner
+      try { await onRefresh?.() } finally {
+        setRefreshing(false)
+        setPull(0)
+      }
+    } else {
+      setPull(0)
+    }
+  }
+
+  const progress = Math.min(1, pull / PTR_THRESHOLD)
+
+  return (
+    <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
+      {/* Indicador */}
+      <div
+        className="flex justify-center overflow-hidden"
+        style={{ height: pull, transition: startY.current === null ? 'height 0.25s ease' : 'none' }}
+      >
+        <div
+          className="mt-3 w-9 h-9 rounded-full bg-gray-900 border border-gray-700 shadow-lg flex items-center justify-center"
+          style={{ opacity: Math.max(0.25, progress) }}
+        >
+          <RefreshCw
+            className={`w-4 h-4 ${progress >= 1 ? 'text-brand-400' : 'text-gray-500'} ${refreshing ? 'animate-spin' : ''}`}
+            style={!refreshing ? { transform: `rotate(${progress * 270}deg)` } : undefined}
+          />
+        </div>
+      </div>
+      {children}
     </div>
   )
 }

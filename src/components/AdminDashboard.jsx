@@ -10,7 +10,7 @@ import {
   markAllNotificationsRead
 } from '../supabase'
 import { formatDate } from '../utils/helpers'
-import { toast, PageSkeleton } from './shared'
+import { toast, PageSkeleton, PullToRefresh } from './shared'
 import { applyGymTheme } from '../utils/theme'
 import { AdminOverview } from './AdminOverview'
 import { AdminMembers } from './AdminMembers'
@@ -307,6 +307,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
       </nav>
 
       {/* ── CONTENIDO ────────────────────────────────────── */}
+      <PullToRefresh onRefresh={loadData}>
       <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
         {loading ? <PageSkeleton /> : (
           <>
@@ -336,6 +337,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
           </>
         )}
       </main>
+      </PullToRefresh>
 
     </div>
   )
