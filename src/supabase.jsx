@@ -1,5 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
+// Fecha de HOY en hora local (no UTC) — para filtros por fecha
+const localToday = () => {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
 const supabaseUrl      = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey  = import.meta.env.VITE_SUPABASE_ANON_KEY
 const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
@@ -460,7 +466,7 @@ export const getAnnouncements = async () => {
     .from('announcements')
     .select('*')
     .eq('visible', true)
-    .or(`expires_at.is.null,expires_at.gte.${new Date().toISOString().split('T')[0]}`)
+    .or(`expires_at.is.null,expires_at.gte.${localToday()}`)
     .order('pinned', { ascending: false })
     .order('created_at', { ascending: false })
   return { data, error }

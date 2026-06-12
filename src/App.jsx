@@ -1,9 +1,20 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { supabase, signOut } from './supabase'
 import Login from './components/Login'
-import { CheckIn } from './components/CheckIn'
-import { AdminDashboard, UserDashboard } from './components/dashboard'
-import { Toaster } from './components/shared'
+import { Toaster, PageSkeleton } from './components/shared'
+
+// ── CODE SPLITTING ─────────────────────────────────────────
+// Cada rol descarga solo su parte: los miembros nunca bajan el
+// código del panel admin (con sus reportes) y viceversa.
+const AdminDashboard = lazy(() => import('./components/AdminDashboard').then(m => ({ default: m.AdminDashboard })))
+const UserDashboard  = lazy(() => import('./components/UserDashboard').then(m => ({ default: m.UserDashboard })))
+const CheckIn        = lazy(() => import('./components/CheckIn').then(m => ({ default: m.CheckIn })))
+
+const LazyFallback = () => (
+  <div className="min-h-dvh bg-gray-950 px-4 pt-10">
+    <PageSkeleton />
+  </div>
+)
 
 // Lee el código de check-in del hash: #checkin/CODIGO
 function parseCheckin() {
@@ -123,11 +134,13 @@ export default function App() {
   // Si no hay sesión, CheckIn muestra su propio login embebido.
   if (checkinCode) {
     return (
-      <CheckIn
-        code={checkinCode}
-        profile={status === 'ready' ? profile : null}
-        onExit={() => { window.location.hash = ''; setCheckinCode(null) }}
-      />
+      <Suspense fallback={<LazyFallback />}>
+        <CheckIn
+          code={checkinCode}
+          profile={status === 'ready' ? profile : null}
+          onExit={() => { window.location.hash = ''; setCheckinCode(null) }}
+        />
+      </Suspense>
     )
   }
 
@@ -151,8 +164,18 @@ export default function App() {
       !!import.meta.env.VITE_SUPERADMIN_EMAIL &&
       profile.email?.toLowerCase() === import.meta.env.VITE_SUPERADMIN_EMAIL.toLowerCase()
     const props = { profile, onLogout: handleLogout, darkMode, onToggleDark: () => setDarkMode(d => !d) }
-    if (profile.role === 'admin') return <><AdminDashboard {...props} isSuperAdmin={isSuperAdmin} /><Toaster /></>
-    return <><UserDashboard {...props} /><Toaster /></>
+    if (profile.role === 'admin') {
+      return (
+        <Suspense fallback={<LazyFallback />}>
+          <AdminDashboard {...props} isSuperAdmin={isSuperAdmin} /><Toaster />
+        </Suspense>
+      )
+    }
+    return (
+      <Suspense fallback={<LazyFallback />}>
+        <UserDashboard {...props} /><Toaster />
+      </Suspense>
+    )
   }
 
   return null
