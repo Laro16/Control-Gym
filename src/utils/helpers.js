@@ -1,6 +1,6 @@
-import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
-import * as XLSX from 'xlsx'
+// jsPDF y XLSX se cargan bajo demanda (import dinámico) dentro de
+// las funciones de exportación: pesan ~600KB y solo los necesita el
+// admin cuando exporta. Así el bundle inicial es mucho más liviano.
 
 // ── FECHAS ─────────────────────────────────────────────────
 // IMPORTANTE: todas las fechas se manejan en hora LOCAL (Guatemala),
@@ -233,6 +233,7 @@ export const calculateStreak = (attendanceDates, options = {}) => {
 
 // ── PDF COMPROBANTE ────────────────────────────────────────
 export const generatePaymentPDF = async (payment, member) => {
+  const { default: jsPDF } = await import('jspdf')
   const doc = new jsPDF()
   const gymName = import.meta.env.VITE_GYM_NAME || 'Mi Gimnasio'
 
@@ -343,7 +344,9 @@ const loadImageAsBase64 = (url) => new Promise((resolve) => {
 })
 
 // ── PDF HISTORIAL DE PAGOS ─────────────────────────────────
-export const generatePaymentHistoryPDF = (payments, member) => {
+export const generatePaymentHistoryPDF = async (payments, member) => {
+  const { default: jsPDF } = await import('jspdf')
+  const { default: autoTable } = await import('jspdf-autotable')
   const doc = new jsPDF()
   const gymName = import.meta.env.VITE_GYM_NAME || 'Mi Gimnasio'
 
@@ -374,7 +377,8 @@ export const generatePaymentHistoryPDF = (payments, member) => {
 }
 
 // ── EXCEL HISTORIAL ────────────────────────────────────────
-export const generatePaymentHistoryExcel = (payments, member) => {
+export const generatePaymentHistoryExcel = async (payments, member) => {
+  const XLSX = await import('xlsx')
   const rows = (payments || []).map(p => ({
     'Nombre': member?.profile?.full_name,
     'Fecha Pago': formatDate(p.payment_date),
@@ -392,7 +396,8 @@ export const generatePaymentHistoryExcel = (payments, member) => {
 }
 
 // ── EXCEL MAESTRO (todos los miembros) ─────────────────────
-export const generateMasterExcel = (members, payments) => {
+export const generateMasterExcel = async (members, payments) => {
+  const XLSX = await import('xlsx')
   // Hoja 1: Miembros
   const memberRows = (members || []).map(m => ({
     'Nombre': m.profile?.full_name,
