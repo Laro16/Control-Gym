@@ -32,7 +32,7 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
   const pendingPayments = payments.filter(p => p.status === 'pending')
   const overdueMembers = members.filter(m => getMemberPaymentStatus(m, payments) === 'overdue')
   const totalMonth = payments
-    .filter(p => p.status === 'approved' && p.payment_date?.startsWith(new Date().toISOString().slice(0, 7)))
+    .filter(p => p.status === 'approved' && p.payment_date?.startsWith(today().slice(0, 7)))
     .reduce((a, p) => a + Number(p.amount), 0)
 
   const stats = [

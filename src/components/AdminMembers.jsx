@@ -222,7 +222,7 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
 
 // ── GESTIÓN DE ASISTENCIA DEL ADMIN (respaldo / correcciones) ──
 function AttendanceManager({ memberId, attendance, onChange }) {
-  const todayStr = new Date().toISOString().split('T')[0]
+  const todayStr = today()
   const [date, setDate] = useState(todayStr)
   const [busy, setBusy] = useState(false)
 

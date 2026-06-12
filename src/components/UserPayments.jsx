@@ -22,7 +22,8 @@ import {
   approvalStatusLabel, measurementFields, getMeasurementDiff,
   displayValue, getMeasurementComment, daysBetween,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
-  generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage
+  generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage,
+  toLocalDateStr,
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner, toast } from './shared'
@@ -201,7 +202,7 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
     const d     = new Date(currentYear, i, 1)
     const key   = `${currentYear}-${String(i + 1).padStart(2, '0')}`
     const label = d.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })
-    const due   = new Date(currentYear, i + 1, 0).toISOString().slice(0, 10)
+    const due   = toLocalDateStr(new Date(currentYear, i + 1, 0))
     const isPaid = existingPayments.some(p =>
       p.due_date?.slice(0, 7) === key && p.status !== 'rejected'
     )
