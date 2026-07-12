@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, Building2, QrCode, CalendarDays
+  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, QrCode, CalendarDays
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -19,11 +19,10 @@ import { AdminPlans } from './AdminPlans'
 import { AdminReports } from './AdminReports'
 import { AdminAnnouncements } from './AdminAnnouncements'
 import { AdminStats } from './AdminStats'
-import { GymOnboarding } from './GymOnboarding'
 import { CheckInQR } from './CheckInQR'
 import { GymSchedule } from './GymSchedule'
 
-export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSuperAdmin }) {
+export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [tab, setTab]             = useState('overview')
   const [members, setMembers]     = useState([])
   const [payments, setPayments]   = useState([])
@@ -75,7 +74,6 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
     { id: 'checkin',        label: 'Check-in',  icon: QrCode },
     { id: 'calendar',       label: 'Calendario', icon: CalendarDays },
     { id: 'reports',        label: 'Reportes',  icon: FileText },
-    ...(isSuperAdmin ? [{ id: 'platform', label: 'Plataforma', icon: Building2 }] : []),
   ]
 
   const handleAvatarUpload = async (e) => {
@@ -333,7 +331,6 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark, isSu
               </div>
             )}
             {tab === 'calendar'      && <GymSchedule profile={profile} />}
-            {tab === 'platform' && isSuperAdmin && <GymOnboarding />}
           </>
         )}
       </main>

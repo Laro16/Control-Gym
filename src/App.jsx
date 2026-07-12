@@ -160,14 +160,11 @@ export default function App() {
   }
 
   if (status === 'ready' && profile) {
-    const isSuperAdmin =
-      !!import.meta.env.VITE_SUPERADMIN_EMAIL &&
-      profile.email?.toLowerCase() === import.meta.env.VITE_SUPERADMIN_EMAIL.toLowerCase()
     const props = { profile, onLogout: handleLogout, darkMode, onToggleDark: () => setDarkMode(d => !d) }
     if (profile.role === 'admin') {
       return (
         <Suspense fallback={<LazyFallback />}>
-          <AdminDashboard {...props} isSuperAdmin={isSuperAdmin} /><Toaster />
+          <AdminDashboard {...props} /><Toaster />
         </Suspense>
       )
     }

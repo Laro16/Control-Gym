@@ -509,12 +509,12 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
     setLoading(true)
     setError('')
 
-    // 1) Crear usuario con el cliente admin (NO afecta la sesión del admin actual)
+    // 1) Crear usuario vía Edge Function (la service key vive solo en el
+    //    servidor; NO afecta la sesión del admin actual)
     const { data: authData, error: authErr } = await adminCreateUser(
       form.email,
       form.password,
-      form.full_name,
-      gymId
+      form.full_name
     )
 
     if (authErr) {
@@ -529,7 +529,7 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
 
     const userId = authData?.user?.id
     if (!userId) {
-      setError('No se pudo crear el usuario. Verifica que VITE_SUPABASE_SERVICE_KEY esté configurada en Vercel.')
+      setError('No se pudo crear el usuario. Verifica que la Edge Function "admin-users" esté desplegada en Supabase.')
       setLoading(false)
       return
     }

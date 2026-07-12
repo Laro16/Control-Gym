@@ -8,7 +8,6 @@ const localToday = () => {
 
 const supabaseUrl      = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey  = import.meta.env.VITE_SUPABASE_ANON_KEY
-const supabaseServiceKey = import.meta.env.VITE_SUPABASE_SERVICE_KEY
 
 if (!supabaseUrl || !supabaseAnonKey) {
   throw new Error('Faltan VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
@@ -17,18 +16,27 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Cliente normal — para todo el uso general
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
-// Cliente admin — SOLO para crear usuarios sin afectar la sesión activa
-// storageKey diferente evita el warning de "multiple GoTrueClient instances"
-const supabaseAdmin = supabaseServiceKey
-  ? createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-        storageKey: 'gymapp-admin-auth',
-      }
-    })
-  : null
+// ── OPERACIONES PRIVILEGIADAS (Edge Function) ──────────────
+// La service role key ya NO vive en el frontend: cualquier variable
+// VITE_* se empaqueta en el JavaScript público que descarga el
+// navegador, y con esa llave se saltan TODAS las políticas RLS.
+// Crear y eliminar usuarios de Auth ahora pasa por la Edge Function
+// "admin-users", que corre en el servidor de Supabase y verifica
+// que quien llama sea un administrador autenticado.
+const invokeAdminUsers = async (body) => {
+  const { data, error } = await supabase.functions.invoke('admin-users', { body })
+  if (error) {
+    // Intentar extraer el mensaje real que devolvió la función
+    let message = error.message || 'Error en el servidor'
+    try {
+      const ctx = await error.context?.json()
+      if (ctx?.error) message = ctx.error
+    } catch { /* la respuesta no traía JSON */ }
+    return { data: null, error: { message } }
+  }
+  if (data?.error) return { data: null, error: { message: data.error } }
+  return { data, error: null }
+}
 
 // ── AUTENTICACIÓN ──────────────────────────────────────────
 export const signIn = (email, password) =>
@@ -38,7 +46,7 @@ export const signOut = () => supabase.auth.signOut()
 
 export const getSession = () => supabase.auth.getSession()
 
-// ── GIMNASIOS (multi-tenant) ───────────────────────────────
+// ── GIMNASIO (su configuración: logo, color, QR, horarios) ───────────────────────────────
 // Lee el gimnasio del usuario actual (RLS solo deja ver el propio)
 export const getMyGym = async (gymId) => {
   let query = supabase.from('gyms').select('*')
@@ -59,73 +67,6 @@ export const updateGym = async (gymId, updates) => {
   return { data, error }
 }
 
-// ── ALTA DE UN GIMNASIO NUEVO + SU ADMIN (onboarding SaaS) ──
-// Crea en un solo paso: el gimnasio y su usuario administrador.
-// Usa la service key (salta RLS). Pensado para que TÚ des de alta
-// cada cliente que renta la app.
-export const provisionGymWithAdmin = async ({
-  gymName, whatsapp = null, color = '#F97316', address = null,
-  adminEmail, adminPassword, adminName,
-}) => {
-  if (!supabaseAdmin) {
-    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
-  }
-  if (!gymName || !adminEmail || !adminPassword || !adminName) {
-    return { error: { message: 'Faltan datos: nombre del gimnasio, y nombre/email/contraseña del admin' } }
-  }
-
-  // 1) Crear el gimnasio
-  const { data: gym, error: gymErr } = await supabaseAdmin
-    .from('gyms')
-    .insert({
-      name: gymName,
-      whatsapp_number: whatsapp,
-      primary_color: color || '#F97316',
-      address,
-    })
-    .select()
-    .single()
-  if (gymErr) return { error: gymErr }
-
-  // 2) Crear el usuario admin con su gym_id en los metadatos
-  const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
-    email: adminEmail,
-    password: adminPassword,
-    email_confirm: true,
-    user_metadata: { full_name: adminName, role: 'admin', gym_id: gym.id },
-  })
-
-  if (authErr) {
-    // Rollback: si no se pudo crear el admin, borra el gimnasio recién creado
-    await supabaseAdmin.from('gyms').delete().eq('id', gym.id)
-    return { error: authErr }
-  }
-
-  // 3) Reforzar el perfil del admin (el trigger ya lo crea; esto asegura
-  //    role=admin y el gym_id correcto aunque el trigger fallara)
-  await supabaseAdmin.from('profiles').upsert({
-    id: authData.user.id,
-    email: adminEmail,
-    full_name: adminName,
-    role: 'admin',
-    gym_id: gym.id,
-  })
-
-  return { data: { gym, admin: authData.user }, error: null }
-}
-
-// Lista TODOS los gimnasios (solo super-admin, usa service key)
-export const listAllGyms = async () => {
-  if (!supabaseAdmin) {
-    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
-  }
-  const { data, error } = await supabaseAdmin
-    .from('gyms')
-    .select('*')
-    .order('created_at', { ascending: false })
-  return { data, error }
-}
-
 // ── PERFIL ─────────────────────────────────────────────────
 export const getProfile = async (userId) => {
   const { data, error } = await supabase
@@ -137,64 +78,15 @@ export const getProfile = async (userId) => {
 }
 
 // ── CREAR USUARIO SIN AFECTAR SESIÓN DEL ADMIN ────────────
-// Si el email ya existia (usuario eliminado), lo reactiva con nueva contraseña
-// gymId: el gimnasio del admin que lo crea. Se guarda en los metadatos
-//        para que el trigger handle_new_user selle el gym_id en su perfil.
-export const adminCreateUser = async (email, password, fullName, gymId = null) => {
-  if (!supabaseAdmin) {
-    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno' } }
-  }
-
-  // Intento 1: crear normalmente
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { full_name: fullName, role: 'user', gym_id: gymId }
-  })
-
-  if (!error) return { data, error: null }
-
-  // Si el error es "ya registrado", buscar y reactivar el usuario
-  const isAlreadyRegistered =
-    error.message?.toLowerCase().includes('already been registered') ||
-    error.message?.toLowerCase().includes('already registered') ||
-    error.message?.toLowerCase().includes('already exists')
-
-  if (!isAlreadyRegistered) return { data, error }
-
-  // Buscar el usuario por email en Auth
-  const { data: listData, error: listError } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 })
-  if (listError) return { data: null, error: listError }
-
-  const existingUser = listData?.users?.find(
-    u => u.email?.toLowerCase() === email.toLowerCase()
-  )
-  if (!existingUser) return { data: null, error }
-
-  // Reactivar: nueva contrasena, desbanear, actualizar metadatos
-  const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
-    existingUser.id,
-    {
-      password,
-      email_confirm: true,
-      user_metadata: { full_name: fullName, role: 'user', gym_id: gymId },
-      ban_duration: 'none',
-    }
-  )
-
-  if (updateError) return { data: null, error: updateError }
-
-  // Recrear perfil por si quedo huerfano (con la service key para saltar RLS)
-  await supabaseAdmin.from('profiles').upsert({
-    id: existingUser.id,
-    email,
-    full_name: fullName,
-    role: 'user',
-    gym_id: gymId
-  })
-
-  return { data: { user: existingUser }, error: null }
+// Ahora pasa por la Edge Function "admin-users": corre en el servidor,
+// valida que quien llama sea un admin autenticado y usa la service
+// role SOLO del lado del servidor. Si el email ya existía (usuario
+// eliminado), la función lo reactiva con la nueva contraseña.
+// El gym_id se determina en el servidor a partir del perfil del
+// admin que llama — el navegador ya no lo envía.
+export const adminCreateUser = async (email, password, fullName) => {
+  // Devuelve { data: { user: { id, email } }, error } — misma forma que antes
+  return invokeAdminUsers({ action: 'create', email, password, fullName })
 }
 
 // ── MIEMBROS ───────────────────────────────────────────────
@@ -252,12 +144,8 @@ export const reactivateMember = async (id) => {
 }
 
 // Eliminar miembro COMPLETAMENTE (borra de Auth + todas sus tablas)
-// Requiere VITE_SUPABASE_SERVICE_KEY configurada en Vercel
+// El borrado en Auth pasa por la Edge Function "admin-users"
 export const deleteMemberPermanently = async (memberId, profileId) => {
-  if (!supabaseAdmin) {
-    return { error: { message: 'Falta VITE_SUPABASE_SERVICE_KEY en las variables de entorno de Vercel.' } }
-  }
-
   // 1) Eliminar datos relacionados en orden (por foreign keys)
   await supabase.from('attendance').delete().eq('member_id', memberId)
   await supabase.from('measurements').delete().eq('member_id', memberId)
@@ -266,8 +154,8 @@ export const deleteMemberPermanently = async (memberId, profileId) => {
   await supabase.from('members').delete().eq('id', memberId)
   await supabase.from('notifications').delete().eq('profile_id', profileId)
 
-  // 2) Eliminar de Supabase Auth (requiere service role)
-  const { error } = await supabaseAdmin.auth.admin.deleteUser(profileId)
+  // 2) Eliminar de Supabase Auth (la Edge Function valida y ejecuta)
+  const { error } = await invokeAdminUsers({ action: 'delete', profileId })
   return { error }
 }
 
