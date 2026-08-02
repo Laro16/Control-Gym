@@ -19,7 +19,8 @@ const LazyFallback = () => (
 // Lee el código de check-in del hash: #checkin/CODIGO
 function parseCheckin() {
   const m = (window.location.hash || '').match(/^#checkin\/(.+)$/)
-  return m ? decodeURIComponent(m[1]) : null
+  if (!m) return null
+  try { return decodeURIComponent(m[1]) } catch { return null }
 }
 
 async function fetchProfile(userId) {

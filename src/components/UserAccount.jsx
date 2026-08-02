@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Camera, Lock, LogOut, X, Check, Eye, EyeOff, Settings } from 'lucide-react'
-import { supabase } from '../supabase'
+import { supabase, validateImageFile } from '../supabase'
 import { formatDate } from '../utils/helpers'
 
 export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh }) {
@@ -25,13 +25,17 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const validationError = validateImageFile(file)
+    if (validationError) {
+      setMsg({ text: validationError, ok: false })
+      return
+    }
     setAvatarPreview(URL.createObjectURL(file))
     setUploading(true)
     setMsg(null)
     try {
-      const ext  = file.name.split('.').pop().toLowerCase() || 'jpg'
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
       const path = `${profile.id}/avatar.${ext}`
-      await supabase.storage.from('avatars').remove([path])
       const { error: uploadErr } = await supabase.storage
         .from('avatars')
         .upload(path, file, { upsert: true, cacheControl: '1', contentType: file.type || 'image/jpeg' })
@@ -41,6 +45,10 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
         setUploading(false)
         return
       }
+      await supabase.storage.from('avatars').remove(
+        [`${profile.id}/avatar.jpg`, `${profile.id}/avatar.png`, `${profile.id}/avatar.webp`]
+          .filter(candidate => candidate !== path)
+      )
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
       const finalUrl = `${urlData.publicUrl}?v=${Date.now()}`
       const { error: updateErr } = await supabase
@@ -61,7 +69,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
   // ── CAMBIAR CONTRASEÑA ────────────────────────────────────
   const handleChangePassword = async () => {
     setMsg(null)
-    if (newPassword.length < 6) { setMsg({ text: 'Mínimo 6 caracteres', ok: false }); return }
+    if (newPassword.length < 8) { setMsg({ text: 'Mínimo 8 caracteres', ok: false }); return }
     if (newPassword !== confirmPass) { setMsg({ text: 'Las contraseñas no coinciden', ok: false }); return }
     setSaving(true)
     const { error } = await supabase.auth.updateUser({ password: newPassword })
@@ -287,7 +295,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
       {tab === 'password' && (
         <div className="space-y-3">
           <p className="text-xs text-gray-500">
-            Elige una contraseña segura de al menos 6 caracteres.
+            Elige una contraseña segura de al menos 8 caracteres.
           </p>
 
           <div>
@@ -296,7 +304,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
               <input
                 type={showPass ? 'text' : 'password'}
                 className="input text-sm pr-10"
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mínimo 8 caracteres"
                 value={newPassword}
                 onChange={e => setNewPassword(e.target.value)}
               />

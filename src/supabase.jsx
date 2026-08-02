@@ -38,6 +38,51 @@ const invokeAdminUsers = async (body) => {
   return { data, error: null }
 }
 
+const PRIVATE_URL_TTL_SECONDS = 60 * 60
+const IMAGE_TYPES = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
+
+export const validateImageFile = (file, maxMb = 5) => {
+  if (!file) return 'Selecciona una imagen'
+  if (!IMAGE_TYPES[file.type]) return 'Solo se permiten imagenes JPG, PNG o WebP'
+  if (file.size > maxMb * 1024 * 1024) return `La imagen no debe superar ${maxMb} MB`
+  return null
+}
+
+// Las columnas existentes conservan el nombre *_url por compatibilidad, pero
+// para buckets privados guardan una ruta estable. Al leer se genera una URL
+// firmada de corta duracion. Tambien migra de forma transparente URLs publicas
+// antiguas que hayan quedado almacenadas.
+const storagePath = (value, bucket) => {
+  if (!value) return null
+  if (!/^https?:\/\//i.test(value)) return String(value).replace(/^\/+/, '')
+  try {
+    const url = new URL(value)
+    const markers = [
+      `/storage/v1/object/public/${bucket}/`,
+      `/storage/v1/object/sign/${bucket}/`,
+      `/storage/v1/object/authenticated/${bucket}/`,
+    ]
+    const marker = markers.find(m => url.pathname.includes(m))
+    return marker ? decodeURIComponent(url.pathname.split(marker)[1]) : null
+  } catch {
+    return null
+  }
+}
+
+const signPrivateValues = async (values, bucket) => {
+  const paths = [...new Set(values.map(v => storagePath(v, bucket)).filter(Boolean))]
+  if (!paths.length) return new Map()
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUrls(paths, PRIVATE_URL_TTL_SECONDS)
+  if (error || !data) return new Map()
+  return new Map(data.filter(x => x.signedUrl).map(x => [x.path, x.signedUrl]))
+}
+
 // ── AUTENTICACIÓN ──────────────────────────────────────────
 export const signIn = (email, password) =>
   supabase.auth.signInWithPassword({ email, password })
@@ -84,9 +129,19 @@ export const getProfile = async (userId) => {
 // eliminado), la función lo reactiva con la nueva contraseña.
 // El gym_id se determina en el servidor a partir del perfil del
 // admin que llama — el navegador ya no lo envía.
-export const adminCreateUser = async (email, password, fullName) => {
-  // Devuelve { data: { user: { id, email } }, error } — misma forma que antes
-  return invokeAdminUsers({ action: 'create', email, password, fullName })
+export const adminCreateUser = async (email, password, fullName, memberData = {}) => {
+  return invokeAdminUsers({
+    action: 'create',
+    email,
+    password,
+    fullName,
+    phone: memberData.phone || null,
+    birthDate: memberData.birth_date || null,
+    planId: memberData.plan_id || null,
+    startDate: memberData.start_date,
+    emergencyContact: memberData.emergency_contact || null,
+    notes: memberData.notes || null,
+  })
 }
 
 // ── MIEMBROS ───────────────────────────────────────────────
@@ -146,17 +201,7 @@ export const reactivateMember = async (id) => {
 // Eliminar miembro COMPLETAMENTE (borra de Auth + todas sus tablas)
 // El borrado en Auth pasa por la Edge Function "admin-users"
 export const deleteMemberPermanently = async (memberId, profileId) => {
-  // 1) Eliminar datos relacionados en orden (por foreign keys)
-  await supabase.from('attendance').delete().eq('member_id', memberId)
-  await supabase.from('measurements').delete().eq('member_id', memberId)
-  await supabase.from('progress_photos').delete().eq('member_id', memberId)
-  await supabase.from('payments').delete().eq('member_id', memberId)
-  await supabase.from('members').delete().eq('id', memberId)
-  await supabase.from('notifications').delete().eq('profile_id', profileId)
-
-  // 2) Eliminar de Supabase Auth (la Edge Function valida y ejecuta)
-  const { error } = await invokeAdminUsers({ action: 'delete', profileId })
-  return { error }
+  return invokeAdminUsers({ action: 'delete', memberId, profileId })
 }
 
 // ── PAGOS ──────────────────────────────────────────────────
@@ -167,7 +212,19 @@ export const getPayments = async (memberId = null) => {
     .order('due_date', { ascending: false })
   if (memberId) query = query.eq('member_id', memberId)
   const { data, error } = await query
-  return { data, error }
+  if (error || !data) return { data, error }
+  const signed = await signPrivateValues(data.map(p => p.voucher_url), 'vouchers')
+  return {
+    data: data.map(p => {
+      const path = storagePath(p.voucher_url, 'vouchers')
+      return {
+        ...p,
+        voucher_path: path,
+        voucher_url: path ? signed.get(path) || null : null,
+      }
+    }),
+    error: null,
+  }
 }
 
 export const createPayment = async (payment) => {
@@ -190,14 +247,32 @@ export const updatePayment = async (id, updates) => {
 }
 
 export const uploadVoucher = async (file, memberId) => {
-  const ext = file.name.split('.').pop()
-  const path = `${memberId}/${Date.now()}.${ext}`
+  const validationError = validateImageFile(file)
+  if (validationError) return { error: { message: validationError } }
+  const ext = IMAGE_TYPES[file.type]
+  const path = `${memberId}/${crypto.randomUUID()}.${ext}`
   const { error } = await supabase.storage
     .from('vouchers')
-    .upload(path, file, { upsert: false })
+    .upload(path, file, { upsert: false, contentType: file.type, cacheControl: '3600' })
   if (error) return { error }
-  const { data: urlData } = supabase.storage.from('vouchers').getPublicUrl(path)
-  return { url: urlData.publicUrl }
+  return { path }
+}
+
+export const attachPaymentVoucher = async (paymentId, voucherPath) => {
+  const { data, error } = await supabase.rpc('attach_payment_voucher', {
+    p_payment_id: paymentId,
+    p_voucher_path: voucherPath,
+  })
+  return { data, error }
+}
+
+export const submitMemberPayments = async (dueDates, method, voucherPath) => {
+  const { data, error } = await supabase.rpc('submit_member_payments', {
+    p_due_dates: dueDates,
+    p_payment_method: method,
+    p_voucher_path: voucherPath,
+  })
+  return { data, error }
 }
 
 // ── MEDIDAS ────────────────────────────────────────────────
@@ -236,18 +311,31 @@ export const getProgressPhotos = async (memberId) => {
     .select('*')
     .eq('member_id', memberId)
     .order('photo_date', { ascending: false })
-  return { data, error }
+  if (error || !data) return { data, error }
+  const signed = await signPrivateValues(data.map(p => p.photo_url), 'progress')
+  return {
+    data: data.map(p => {
+      const path = storagePath(p.photo_url, 'progress')
+      return {
+        ...p,
+        photo_path: path,
+        photo_url: path ? signed.get(path) || null : null,
+      }
+    }),
+    error: null,
+  }
 }
 
 export const uploadProgressPhoto = async (file, memberId) => {
-  const ext = file.name.split('.').pop()
-  const path = `${memberId}/${Date.now()}.${ext}`
+  const validationError = validateImageFile(file)
+  if (validationError) return { error: { message: validationError } }
+  const ext = IMAGE_TYPES[file.type]
+  const path = `${memberId}/${crypto.randomUUID()}.${ext}`
   const { error } = await supabase.storage
     .from('progress')
-    .upload(path, file)
+    .upload(path, file, { upsert: false, contentType: file.type, cacheControl: '3600' })
   if (error) return { error }
-  const { data: urlData } = supabase.storage.from('progress').getPublicUrl(path)
-  return { url: urlData.publicUrl }
+  return { path }
 }
 
 export const createProgressPhoto = async (photo) => {
@@ -275,6 +363,11 @@ export const markAttendance = async (memberId, date) => {
     .upsert({ member_id: memberId, attended_date: date })
     .select()
     .single()
+  return { data, error }
+}
+
+export const registerCheckin = async (code) => {
+  const { data, error } = await supabase.rpc('register_checkin', { p_code: code })
   return { data, error }
 }
 

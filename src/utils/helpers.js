@@ -1,6 +1,6 @@
-import { getBrandHex, getBrandRGB } from './theme'
+import { getBrandHex, getBrandRGB } from './theme.js'
 
-// jsPDF y XLSX se cargan bajo demanda (import dinámico) dentro de
+// jsPDF y write-excel-file se cargan bajo demanda (import dinámico) dentro de
 // las funciones de exportación: pesan ~600KB y solo los necesita el
 // admin cuando exporta. Así el bundle inicial es mucho más liviano.
 
@@ -380,7 +380,7 @@ export const generatePaymentHistoryPDF = async (payments, member) => {
 
 // ── EXCEL HISTORIAL ────────────────────────────────────────
 export const generatePaymentHistoryExcel = async (payments, member) => {
-  const XLSX = await import('xlsx')
+  const { default: writeXlsxFile } = await import('write-excel-file/browser')
   const rows = (payments || []).map(p => ({
     'Nombre': member?.profile?.full_name,
     'Fecha Pago': formatDate(p.payment_date),
@@ -391,15 +391,15 @@ export const generatePaymentHistoryExcel = async (payments, member) => {
     'Notas': p.notes || '',
   }))
 
-  const ws = XLSX.utils.json_to_sheet(rows)
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, ws, 'Pagos')
-  XLSX.writeFile(wb, `pagos_${member?.profile?.full_name}.xlsx`)
+  await writeXlsxFile(objectsToExcelRows(rows), {
+    fileName: `pagos_${safeFilename(member?.profile?.full_name)}.xlsx`,
+    sheet: 'Pagos',
+  })
 }
 
 // ── EXCEL MAESTRO (todos los miembros) ─────────────────────
 export const generateMasterExcel = async (members, payments) => {
-  const XLSX = await import('xlsx')
+  const { default: writeXlsxFile } = await import('write-excel-file/browser')
   // Hoja 1: Miembros
   const memberRows = (members || []).map(m => ({
     'Nombre': m.profile?.full_name,
@@ -421,10 +421,32 @@ export const generateMasterExcel = async (members, payments) => {
     'Estado': p.status,
   }))
 
-  const wb = XLSX.utils.book_new()
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(memberRows), 'Miembros')
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(paymentRows), 'Pagos')
-  XLSX.writeFile(wb, 'reporte_maestro_gimnasio.xlsx')
+  await writeXlsxFile([
+    objectsToExcelRows(memberRows),
+    objectsToExcelRows(paymentRows),
+  ], {
+    sheets: ['Miembros', 'Pagos'],
+    fileName: 'reporte_maestro_gimnasio.xlsx',
+  })
+}
+
+const safeFilename = (value) => String(value || 'miembro')
+  .normalize('NFD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-zA-Z0-9_-]+/g, '_')
+  .replace(/^_+|_+$/g, '') || 'miembro'
+
+const objectsToExcelRows = (rows) => {
+  const headers = rows.length ? Object.keys(rows[0]) : ['Sin datos']
+  const headerRow = headers.map(value => ({
+    value,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    backgroundColor: '#F97316',
+    align: 'center',
+  }))
+  const dataRows = rows.map(row => headers.map(key => ({ value: row[key] ?? '' })))
+  return [headerRow, ...dataRows]
 }
 
 // ── MONEDA ─────────────────────────────────────────────────

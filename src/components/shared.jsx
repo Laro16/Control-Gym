@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useId } from 'react'
 import { X, Check, CheckCircle, AlertCircle, Info, RefreshCw } from 'lucide-react'
 import { paymentStatusLabel } from '../utils/helpers'
 
@@ -218,13 +218,32 @@ export function Spinner() {
 }
 
 export function Modal({ open, onClose, title, children }) {
+  const titleId = useId()
+  const boxRef = useRef(null)
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
+
+  useEffect(() => {
+    if (!open) return
+    const previous = document.activeElement
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') onCloseRef.current?.()
+    }
+    document.addEventListener('keydown', onKeyDown)
+    requestAnimationFrame(() => boxRef.current?.focus())
+    return () => {
+      document.removeEventListener('keydown', onKeyDown)
+      previous?.focus?.()
+    }
+  }, [open])
+
   if (!open) return null
   return (
     <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="modal-box">
+      <div ref={boxRef} className="modal-box" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="flex items-center justify-between p-5 border-b border-gray-800">
-          <h3 className="font-semibold text-white text-lg">{title}</h3>
-          <button onClick={onClose} className="btn-ghost p-2 rounded-lg">
+          <h3 id={titleId} className="font-semibold text-white text-lg">{title}</h3>
+          <button onClick={onClose} className="btn-ghost p-2 rounded-lg" aria-label="Cerrar ventana">
             <X className="w-5 h-5" />
           </button>
         </div>

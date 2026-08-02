@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { toast, EmptyState } from './shared'
 import { TrendingUp, TrendingDown, Camera, ChevronDown, ChevronUp, Minus } from 'lucide-react'
-import { uploadProgressPhoto, createProgressPhoto } from '../supabase'
+import { supabase, uploadProgressPhoto, createProgressPhoto } from '../supabase'
 import {
   measurementFields, getMeasurementDiff, displayValue,
   getMeasurementComment, formatDate, formatDateShort, today
@@ -344,18 +344,23 @@ export function UserBody({ measurements, photos, member, onRefresh }) {
     const file = e.target.files?.[0]
     if (!file || !member) return
     setUploading(true)
-    const { url, error } = await uploadProgressPhoto(file, member.id)
+    const { path, error } = await uploadProgressPhoto(file, member.id)
     if (!error) {
-      await createProgressPhoto({
+      const { error: recordError } = await createProgressPhoto({
         member_id:  member.id,
-        photo_url:  url,
+        photo_url:  path,
         photo_date: today(),
         angle:      selectedAngle,
       })
-      toast.success('Foto de progreso guardada')
-      onRefresh()
+      if (recordError) {
+        await supabase.storage.from('progress').remove([path])
+        toast.error('La foto se subió, pero no se pudo guardar el registro')
+      } else {
+        toast.success('Foto de progreso guardada')
+        onRefresh()
+      }
     } else {
-      toast.error('Error al subir la foto. Intenta de nuevo.')
+      toast.error(error.message || 'Error al subir la foto. Intenta de nuevo.')
     }
     setUploading(false)
   }

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle, Flame, AlertCircle, XCircle, Dumbbell, LogIn } from 'lucide-react'
-import { supabase, getMyGym, getAttendance, markAttendance } from '../supabase'
-import { today, calculateStreak, getMemberPaymentStatus } from '../utils/helpers'
+import { CheckCircle, Flame, AlertCircle, XCircle, Dumbbell } from 'lucide-react'
+import { supabase, getMyGym, registerCheckin } from '../supabase'
+import { getMemberPaymentStatus } from '../utils/helpers'
 import { applyGymTheme } from '../utils/theme'
 import Login from './Login'
 
@@ -27,14 +27,6 @@ export function CheckIn({ code, profile, onExit }) {
         setGymName(gym.name)
         applyGymTheme(gym.primary_color)
 
-        if (gym.checkin_code !== code) { setState('wrong_gym'); return }
-
-        // Config de racha del gimnasio (días cerrados / festivos)
-        const opts = {
-          closedWeekdays: gym.closed_weekdays || [0, 6],
-          holidays: Array.isArray(gym.holidays) ? gym.holidays : [],
-        }
-
         // 2) Los admins no tienen ficha de miembro
         if (profile.role === 'admin') { setState('admin'); return }
 
@@ -46,6 +38,7 @@ export function CheckIn({ code, profile, onExit }) {
           .single()
         if (cancelled) return
         if (!member) { setState('no_member'); return }
+        if (member.status !== 'active') { setState('inactive'); return }
 
         // Nota de cuota vencida (no bloquea el check-in)
         const { data: payments } = await supabase
@@ -53,34 +46,23 @@ export function CheckIn({ code, profile, onExit }) {
         if (cancelled) return
         setOverdue(getMemberPaymentStatus(member, payments || []) === 'overdue')
 
-        // 4) ¿Ya registró hoy?
-        const { data: attendance } = await getAttendance(member.id)
+        // 4) Registrar en el servidor. Allí se valida el QR, estado del
+        // miembro, fecha local del gimnasio y duplicados del mismo día.
+        const { data: result, error: checkinError } = await registerCheckin(code)
         if (cancelled) return
-        const todayStr = today()
-        const already  = (attendance || []).some(a => a.attended_date === todayStr)
-
-        if (already) {
-          setStreak(calculateStreak(attendance || [], opts))
-          setState('already')
+        if (checkinError) {
+          if (checkinError.message?.toLowerCase().includes('codigo')) setState('wrong_gym')
+          else if (checkinError.message?.toLowerCase().includes('activa')) setState('inactive')
+          else setState('error')
           return
         }
 
-        // 5) Registrar asistencia de hoy
-        await markAttendance(member.id, todayStr)
-        const { data: fresh } = await getAttendance(member.id)
-        if (cancelled) return
-        const newStreak = calculateStreak(fresh || [], opts)
+        const newStreak = Number(result?.streak || 0)
         setStreak(newStreak)
-
-        // Actualizar mejor racha si se superó
-        if (newStreak > (member.best_streak || 0)) {
-          await supabase.from('members')
-            .update({ best_streak: newStreak })
-            .eq('id', member.id)
-        }
+        if (result?.gym_name) setGymName(result.gym_name)
 
         if (navigator.vibrate) navigator.vibrate([35, 50, 35]) // doble pulso de celebración
-        setState('success')
+        setState(result?.already ? 'already' : 'success')
       } catch {
         if (!cancelled) setState('error')
       }
@@ -92,18 +74,7 @@ export function CheckIn({ code, profile, onExit }) {
 
   // ── Sin sesión: pedir login (el código se conserva en la URL) ──
   if (!profile) {
-    return (
-      <div className="min-h-dvh bg-gray-950 flex flex-col items-center justify-center p-4">
-        <div className="text-center mb-6 max-w-sm">
-          <div className="inline-flex items-center justify-center w-14 h-14 bg-brand-500/10 border border-brand-500/30 rounded-2xl mb-3">
-            <LogIn className="w-7 h-7 text-brand-500" />
-          </div>
-          <h1 className="text-xl font-semibold text-white">Inicia sesión para registrar tu asistencia</h1>
-          <p className="text-gray-500 text-sm mt-1">Tu check-in se completará en cuanto entres.</p>
-        </div>
-        <Login />
-      </div>
-    )
+    return <Login notice="Inicia sesión y tu check-in se completará automáticamente." />
   }
 
   // ── Pantallas de resultado ──
@@ -161,6 +132,14 @@ export function CheckIn({ code, profile, onExit }) {
               <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
               <h1 className="text-lg font-semibold text-white">No tienes ficha de miembro</h1>
               <p className="text-gray-500 text-sm mt-1">Habla con tu gimnasio para que te registre.</p>
+            </div>
+          )}
+
+          {state === 'inactive' && (
+            <div className="py-6">
+              <XCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
+              <h1 className="text-lg font-semibold text-white">Membresía inactiva</h1>
+              <p className="text-gray-500 text-sm mt-1">Habla con recepción para reactivar tu acceso.</p>
             </div>
           )}
 

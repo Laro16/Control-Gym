@@ -56,10 +56,10 @@ gymapp/
 > sáltate 1.1, 1.2, 1.3 y 1.5 — tu base ya está lista.
 
 ### 1.2 Ejecutar el SQL
-En **SQL Editor** ejecuta, en este orden, los scripts con los que se construyó
-la base: estructura de tablas, políticas RLS, funciones (`is_admin`,
-`current_gym_id`, `handle_new_user`) y `fase-final.sql` (job diario de
-notificaciones con `pg_cron`).
+Si la base ya existe, ejecuta en **SQL Editor** el archivo
+`supabase/migrations/20260802_security_integrity.sql`. Después ejecuta
+`supabase/verification_queries.sql` para comprobar RLS, buckets, funciones y
+duplicados. Sigue el orden completo de `ACTUALIZACION_SEGURIDAD_2026-08-02.md`.
 
 ### 1.3 Crear Storage Buckets
 En **"Storage"** crea estos 4 buckets:
@@ -72,24 +72,10 @@ En **"Storage"** crea estos 4 buckets:
 | `logos`   | SÍ        | Logo del gimnasio                   |
 
 ### 1.4 Configurar políticas de Storage
-Para `vouchers` y `progress` (privados), ve a cada bucket → **Policies** → **New Policy** → "For full customization":
-
-**Política para subir archivos (INSERT):**
-```sql
--- Nombre: allow_authenticated_upload
--- Operation: INSERT
-(auth.role() = 'authenticated')
-```
-
-**Política para leer archivos (SELECT):**
-```sql
--- Nombre: allow_authenticated_read
--- Operation: SELECT
-(auth.role() = 'authenticated')
-```
-
-Para `avatars` y `logos` (públicos), solo agrega la política de INSERT para
-usuarios autenticados.
+No crees políticas generales con `auth.role() = 'authenticated'`: permitirían
+acceder a archivos de otros miembros. La migración
+`20260802_security_integrity.sql` instala políticas por carpeta, miembro y
+gimnasio para los cuatro buckets.
 
 ### 1.5 Crear el gimnasio y el primer administrador
 1. Ve a **SQL Editor** y crea el gimnasio (guarda el `id` que devuelve):
@@ -249,7 +235,7 @@ miembro sale un error de servidor, verifica que esa función esté desplegada.
 | `jspdf-autotable`    | Tablas dentro de los PDFs                           |
 | `lucide-react`       | Íconos modernos y limpios                           |
 | `qrcode.react`       | Código QR de check-in                               |
-| `xlsx`               | Exportar Excel con historial de pagos               |
+| `write-excel-file`   | Exportar Excel con historial de pagos               |
 
 ---
 

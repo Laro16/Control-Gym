@@ -96,6 +96,23 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     { id: 'plans',      label: 'Planes',    icon: ClipboardList },
   ]
 
+  if (!loading && member && member.status !== 'active') {
+    return (
+      <div className="min-h-dvh bg-gray-950 flex items-center justify-center p-5">
+        <div className="card w-full max-w-sm text-center">
+          <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto mb-4">
+            <LogOut className="w-7 h-7 text-red-400" />
+          </div>
+          <h1 className="text-xl font-semibold text-white">Membresía inactiva</h1>
+          <p className="text-sm text-gray-500 mt-2 mb-5">
+            Tu acceso fue desactivado. Contacta a la recepción del gimnasio para solicitar la reactivación.
+          </p>
+          <button className="btn-secondary w-full" onClick={onLogout}>Cerrar sesión</button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="min-h-dvh bg-gray-950 flex flex-col">
       <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">

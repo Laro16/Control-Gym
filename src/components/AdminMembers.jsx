@@ -15,7 +15,8 @@ import {
   updateMember, getPlans, createPlan, updatePlan,  
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
-  markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto
+  markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto,
+  deleteMemberPermanently
 } from '../supabase'
 import {
   formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
@@ -25,7 +26,7 @@ import {
   generateMasterExcel, today, addDays, calculateStreak
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner , EmptyState } from './shared'
+import { Modal, ConfirmModal, Spinner, EmptyState, toast } from './shared'
 
 // ── ADMIN MEMBERS ──────────────────────────────────────────
 export function AdminMembers({ members, plans, onRefresh, gymId }) {
@@ -39,8 +40,13 @@ export function AdminMembers({ members, plans, onRefresh, gymId }) {
     m.profile?.email?.toLowerCase().includes(search.toLowerCase())
   )
 
-  const handleDelete = async (memberId) => {
-    await deleteMember(memberId)
+  const handleDelete = async (member) => {
+    const { error } = await deleteMemberPermanently(member.id, member.profile_id)
+    if (error) {
+      toast.error(error.message || 'No se pudo eliminar el miembro')
+      return
+    }
+    toast.success('Miembro eliminado permanentemente')
     onRefresh()
   }
 
@@ -83,7 +89,7 @@ export function AdminMembers({ members, plans, onRefresh, gymId }) {
                 <button className="btn-ghost p-1.5" onClick={() => setSelected(m)}>
                   <Edit2 className="w-4 h-4" />
                 </button>
-                <button className="btn-danger p-1.5" onClick={() => setConfirmDelete(m.id)}>
+                <button className="btn-danger p-1.5" onClick={() => setConfirmDelete(m)} aria-label={`Eliminar a ${m.profile?.full_name || 'miembro'}`}>
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -107,7 +113,7 @@ export function AdminMembers({ members, plans, onRefresh, gymId }) {
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
         onConfirm={() => handleDelete(confirmDelete)}
-        message="¿Eliminar este miembro? Esta acción no se puede deshacer."
+        message={`¿Eliminar permanentemente a ${confirmDelete?.profile?.full_name || 'este miembro'}? También se eliminarán sus pagos, asistencias, fotos y acceso.`}
       />
 
       <CreateMemberModal open={showCreate} onClose={() => { setShowCreate(false); onRefresh() }} plans={plans} gymId={gymId} />
@@ -502,8 +508,8 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
       setError('Nombre, email y contraseña son obligatorios')
       return
     }
-    if (form.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres')
+    if (form.password.length < 8) {
+      setError('La contraseña debe tener al menos 8 caracteres')
       return
     }
     setLoading(true)
@@ -514,7 +520,8 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
     const { data: authData, error: authErr } = await adminCreateUser(
       form.email,
       form.password,
-      form.full_name
+      form.full_name,
+      form
     )
 
     if (authErr) {
@@ -530,36 +537,6 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
     const userId = authData?.user?.id
     if (!userId) {
       setError('No se pudo crear el usuario. Verifica que la Edge Function "admin-users" esté desplegada en Supabase.')
-      setLoading(false)
-      return
-    }
-
-    // 2) El trigger crea el perfil automáticamente, pero lo actualizamos con datos extra
-    await new Promise(r => setTimeout(r, 800))
-    await supabase.from('profiles').upsert({
-      id: userId,
-      email: form.email,
-      full_name: form.full_name,
-      phone: form.phone || null,
-      birth_date: form.birth_date || null,
-      role: 'user',
-      gym_id: gymId
-    })
-
-    // 3) Crear el registro de miembro (gym_id explícito; el trigger también lo respalda)
-    const { error: memErr } = await supabase.from('members').insert({
-      profile_id: userId,
-      plan_id: form.plan_id || null,
-      start_date: form.start_date,
-      emergency_contact: form.emergency_contact || null,
-      notes: form.notes || null,
-      gym_id: gymId,
-    })
-
-    if (memErr) {
-      setError(memErr.message.includes('duplicate')
-        ? 'Este usuario ya tiene un perfil de miembro.'
-        : memErr.message)
       setLoading(false)
       return
     }
@@ -591,7 +568,7 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
               <div><label className="label">Email *</label>
                 <input type="email" className="input" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
               <div><label className="label">Contraseña temporal *</label>
-                <input type="text" className="input" placeholder="Mínimo 6 caracteres" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
+                <input type="password" autoComplete="new-password" className="input" placeholder="Mínimo 8 caracteres" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
               <div><label className="label">Teléfono</label>
                 <input className="input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
               <div><label className="label">Fecha de nacimiento</label>

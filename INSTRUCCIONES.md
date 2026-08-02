@@ -1,4 +1,10 @@
-# 📦 Entrega: Control Gym — Modo un solo gimnasio + cierre de seguridad
+# ⚠️ Instrucciones anteriores
+
+Este documento describe una entrega anterior y se conserva solo como historial.
+Para instalar la versión actual sigue **ACTUALIZACION_SEGURIDAD_2026-08-02.md**.
+La versión actual sí requiere una migración SQL antes de publicar el frontend.
+
+# 📦 Entrega anterior: Control Gym — Modo un solo gimnasio + cierre de seguridad
 
 ## Qué cambió en esta entrega
 

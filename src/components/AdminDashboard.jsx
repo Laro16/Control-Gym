@@ -7,7 +7,7 @@ import { playNotifSound } from '../App'
 import {
   supabase,
   getMembers, getPayments, getPlans, getNotifications,
-  markAllNotificationsRead
+  markAllNotificationsRead, validateImageFile
 } from '../supabase'
 import { formatDate } from '../utils/helpers'
 import { toast, PageSkeleton, PullToRefresh } from './shared'
@@ -79,12 +79,13 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const validationError = validateImageFile(file)
+    if (validationError) { toast.error(validationError); return }
     setAvatarPreview(URL.createObjectURL(file))
     setUploadingAvatar(true)
     try {
-      const ext  = file.name.split('.').pop().toLowerCase() || 'jpg'
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
       const path = `${profile.id}/avatar.${ext}`
-      await supabase.storage.from('avatars').remove([path])
       const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, {
         upsert: true, cacheControl: '1', contentType: file.type || 'image/jpeg'
       })
@@ -92,6 +93,10 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
         toast.error('Error al subir: ' + upErr.message)
         setAvatarPreview(null)
       } else {
+        await supabase.storage.from('avatars').remove(
+          [`${profile.id}/avatar.jpg`, `${profile.id}/avatar.png`, `${profile.id}/avatar.webp`]
+            .filter(candidate => candidate !== path)
+        )
         const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
         const finalUrl = `${urlData.publicUrl}?v=${Date.now()}`
         await supabase.from('profiles').update({ avatar_url: finalUrl }).eq('id', profile.id)
@@ -109,15 +114,20 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const handleLogoUpload = async (e) => {
     const file = e.target.files?.[0]
     if (!file) return
+    const validationError = validateImageFile(file)
+    if (validationError) { toast.error(validationError); return }
     setUploadingLogo(true)
-    const ext  = file.name.split('.').pop() || 'png'
+    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
     // Ruta por gimnasio: evita que un gimnasio sobrescriba el logo de otro
     const path = `${profile.gym_id}/logo.${ext}`
-    await supabase.storage.from('logos').remove([path])
     const { error } = await supabase.storage.from('logos').upload(path, file, {
       upsert: true, cacheControl: '1', contentType: file.type
     })
     if (!error) {
+      await supabase.storage.from('logos').remove(
+        [`${profile.gym_id}/logo.jpg`, `${profile.gym_id}/logo.png`, `${profile.gym_id}/logo.webp`]
+          .filter(candidate => candidate !== path)
+      )
       const { data: urlData } = supabase.storage.from('logos').getPublicUrl(path)
       const url = `${urlData.publicUrl}?v=${Date.now()}`
       await supabase.from('gyms').update({ logo_url: url }).eq('id', profile.gym_id)

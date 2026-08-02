@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { signIn } from '../supabase'
 import { Dumbbell, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
-export default function Login() {
+export default function Login({ notice = '' }) {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -51,6 +51,12 @@ export default function Login() {
         <div className="card">
           <h2 className="text-lg font-semibold text-white mb-5">Iniciar sesión</h2>
 
+          {notice && (
+            <div className="text-sm text-brand-300 bg-brand-500/10 border border-brand-500/20 rounded-xl px-3 py-2.5 mb-4">
+              {notice}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="label">Correo electrónico</label>
@@ -79,6 +85,7 @@ export default function Login() {
                   type="button"
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 transition-colors"
                   onClick={() => setShowPass(!showPass)}
+                  aria-label={showPass ? 'Ocultar contraseña' : 'Mostrar contraseña'}
                 >
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>

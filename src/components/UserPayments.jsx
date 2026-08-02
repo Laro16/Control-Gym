@@ -15,7 +15,8 @@ import {
   updateMember, getPlans, createPlan, updatePlan,
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
-  markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto
+  markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto,
+  attachPaymentVoucher, submitMemberPayments
 } from '../supabase'
 import {
   formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
@@ -36,13 +37,19 @@ export function UserPayments({ payments, member, onRefresh }) {
   const handleUploadVoucher = async (paymentId, file) => {
     if (!file || !member) return
     setUploading(paymentId)
-    const { url, error } = await uploadVoucher(file, member.id)
+    const { path, error } = await uploadVoucher(file, member.id)
     if (error) {
       toast.error('Error al subir el comprobante. Verifica tu conexión e intenta de nuevo.')
       setUploading(null)
       return
     }
-    await updatePayment(paymentId, { voucher_url: url, status: 'pending', payment_date: today() })
+    const { error: attachError } = await attachPaymentVoucher(paymentId, path)
+    if (attachError) {
+      await supabase.storage.from('vouchers').remove([path])
+      toast.error(attachError.message || 'No se pudo asociar el comprobante al pago')
+      setUploading(null)
+      return
+    }
     await createNotification({
       profile_id: member.profile_id,
       type: 'custom',
@@ -182,43 +189,38 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
   const [preview, setPreview]     = useState(null)
   const [uploading, setUploading] = useState(false)
   const [success, setSuccess]     = useState(false)
-  const [selectedMonths, setSelectedMonths] = useState([])
-  const [yearOffset, setYearOffset] = useState(0) // 0 = año actual, 1 = próximo año
+  const [selectedCycles, setSelectedCycles] = useState([])
 
   const planPrice = member?.plan?.price || 0
   const planName  = member?.plan?.name  || 'Sin plan'
 
-  // Mes de inicio del miembro — no puede pagar meses anteriores a su inscripcion
-  const startKey  = member?.start_date?.slice(0, 7) || '2000-01'
-  const startYear = parseInt(startKey.slice(0, 4))
-  const thisYear  = new Date().getFullYear()
+  // Los cobros siguen la duracion real del plan, no el fin del mes calendario.
+  // Para datos antiguos se continua desde el ultimo vencimiento registrado.
+  const durationDays = Math.max(1, Number(member?.plan?.duration_days || 30))
+  const lastRegisteredDue = existingPayments
+    .filter(p => p.status !== 'rejected' && p.due_date)
+    .map(p => p.due_date)
+    .sort()
+    .at(-1)
+  const cycleAnchor = lastRegisteredDue || member?.start_date || today()
+  const cycles = Array.from({ length: 12 }, (_, index) => {
+    const due = addDays(cycleAnchor, durationDays * (index + 1))
+    const begins = addDays(due, -durationDays + 1)
+    return {
+      key: due,
+      due,
+      label: `Vence ${formatDate(due)}`,
+      range: `${formatDate(begins)} – ${formatDate(due)}`,
+    }
+  })
 
-  // El año offset solo puede ser desde el año de inicio en adelante
-  // y máximo el año siguiente al actual
-  const baseYear   = Math.max(startYear, thisYear)
-  const currentYear = baseYear + yearOffset
-
-  const allMonths = Array.from({ length: 12 }, (_, i) => {
-    const d     = new Date(currentYear, i, 1)
-    const key   = `${currentYear}-${String(i + 1).padStart(2, '0')}`
-    const label = d.toLocaleDateString('es-GT', { month: 'long', year: 'numeric' })
-    const due   = toLocalDateStr(new Date(currentYear, i + 1, 0))
-    const isPaid = existingPayments.some(p =>
-      p.due_date?.slice(0, 7) === key && p.status !== 'rejected'
-    )
-    const isBeforeStart = key < startKey
-    return { key, label, due, isPaid, isBeforeStart }
-  }).filter(m => !m.isBeforeStart)
-
-  const toggleMonth = (key) => {
-    const month = allMonths.find(m => m.key === key)
-    if (month?.isPaid) return // no deseleccionar meses ya pagados
-    setSelectedMonths(prev =>
+  const toggleCycle = (key) => {
+    setSelectedCycles(prev =>
       prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
     )
   }
 
-  const totalAmount = selectedMonths.length * planPrice
+  const totalAmount = selectedCycles.length * planPrice
 
   const handleFileChange = (e) => {
     const f = e.target.files?.[0]
@@ -228,29 +230,29 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
   }
 
   const handleSubmit = async () => {
-    if (!selectedMonths.length) { toast.info('Selecciona al menos una cuota'); return }
+    if (!selectedCycles.length) { toast.info('Selecciona al menos un ciclo'); return }
     if (!file) { toast.info('Debes subir el comprobante de pago (foto del depósito o transferencia)'); return }
     if (!member) return
 
     setUploading(true)
 
-    const { url, error } = await uploadVoucher(file, member.id)
-    if (error) { toast.error('Error al subir el comprobante. Intenta de nuevo.'); setUploading(false); return }
+    const { path, error } = await uploadVoucher(file, member.id)
+    if (error) {
+      toast.error(error.message || 'Error al subir el comprobante. Intenta de nuevo.')
+      setUploading(false)
+      return
+    }
 
-    // Crear un pago por cada cuota seleccionada
-    const months = [...selectedMonths].sort()
-    for (const key of months) {
-      const month = allMonths.find(m => m.key === key)
-      await createPayment({
-        member_id:      member.id,
-        amount:         planPrice,
-        payment_method: method,
-        payment_date:   today(),
-        due_date:       month.due,
-        status:         'pending',
-        voucher_url:    url,
-        notes:          `Cuota ${month.label}`,
-      })
+    const { error: submitError } = await submitMemberPayments(
+      [...selectedCycles].sort(),
+      method,
+      path
+    )
+    if (submitError) {
+      await supabase.storage.from('vouchers').remove([path])
+      toast.error(submitError.message || 'No se pudo registrar el pago')
+      setUploading(false)
+      return
     }
 
     setUploading(false)
@@ -261,9 +263,8 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
     setMethod('transfer')
     setFile(null)
     setPreview(null)
-    setSelectedMonths([])
+    setSelectedCycles([])
     setSuccess(false)
-    setYearOffset(0)
     onClose()
     onRefresh()
   }
@@ -284,7 +285,7 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
 
 👤 *${member?.profile?.full_name}*
 💰 *${formatCurrency(totalAmount)}*
-📅 Cuotas: ${selectedMonths.map(k => allMonths.find(m => m.key === k)?.label).join(', ')}
+📅 Ciclos: ${selectedCycles.map(k => cycles.find(c => c.key === k)?.label).join(', ')}
 
 Por favor revisar y aprobar ✅`
             const num = (import.meta.env.VITE_GYM_WHATSAPP || '').replace(/[^0-9]/g,'')
@@ -303,54 +304,37 @@ Por favor revisar y aprobar ✅`
           {/* Plan info */}
           <div className="bg-brand-500/10 border border-brand-500/20 rounded-xl px-4 py-3">
             <p className="text-xs text-gray-400">Tu plan</p>
-            <p className="font-semibold text-white">{planName} — {formatCurrency(planPrice)}/mes</p>
+            <p className="font-semibold text-white">{planName} — {formatCurrency(planPrice)} cada {durationDays} días</p>
           </div>
 
-          {/* Selector de año — solo mostrar año de inicio en adelante */}
-          <div className="flex items-center justify-between">
-            <label className="label mb-0">¿Qué cuotas deseas pagar?</label>
-            <div className="flex items-center gap-2 bg-gray-800 rounded-lg px-1 py-0.5">
-              <button
-                onClick={() => { setYearOffset(0); setSelectedMonths([]) }}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-all
-                  ${yearOffset === 0 ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'}`}
-              >{baseYear}</button>
-              <button
-                onClick={() => { setYearOffset(1); setSelectedMonths([]) }}
-                className={`px-3 py-1 rounded-md text-xs font-medium transition-all
-                  ${yearOffset === 1 ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'}`}
-              >{baseYear + 1}</button>
-            </div>
+          <div>
+            <label className="label mb-0">¿Qué ciclos deseas pagar?</label>
+            <p className="text-[11px] text-gray-500 mt-1">Se calculan desde tu último vencimiento registrado.</p>
           </div>
 
-          {/* Grid de 12 meses */}
+          {/* Proximos 12 ciclos del plan */}
           <div className="grid grid-cols-2 gap-2">
-            {allMonths.map(m => {
-              const isSelected = selectedMonths.includes(m.key)
+            {cycles.map(cycle => {
+              const isSelected = selectedCycles.includes(cycle.key)
               return (
                 <button
-                  key={m.key}
-                  onClick={() => toggleMonth(m.key)}
-                  disabled={m.isPaid}
+                  key={cycle.key}
+                  onClick={() => toggleCycle(cycle.key)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-xl border text-left transition-all
-                    ${m.isPaid
-                      ? 'bg-emerald-500/5 border-emerald-500/20 cursor-not-allowed opacity-60'
-                      : isSelected
+                    ${isSelected
                         ? 'bg-brand-500/10 border-brand-500/40'
                         : 'bg-gray-800/50 border-gray-700 hover:border-gray-500'}`}
                 >
-                  <div>
-                    <p className={`text-xs font-semibold capitalize ${m.isPaid ? 'text-emerald-400' : isSelected ? 'text-white' : 'text-gray-300'}`}>
-                      {m.label.split(' ')[0]}
+                  <div className="min-w-0 pr-2">
+                    <p className={`text-xs font-semibold ${isSelected ? 'text-white' : 'text-gray-300'}`}>
+                      {cycle.label}
                     </p>
-                    {m.isPaid
-                      ? <p className="text-[10px] text-emerald-500">Pagado</p>
-                      : <p className="text-[10px] text-brand-400">{formatCurrency(planPrice)}</p>
-                    }
+                    <p className="text-[10px] text-gray-500 truncate">{cycle.range}</p>
+                    <p className="text-[10px] text-brand-400">{formatCurrency(planPrice)}</p>
                   </div>
                   <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0
-                    ${m.isPaid ? 'border-emerald-500 bg-emerald-500' : isSelected ? 'border-brand-500 bg-brand-500' : 'border-gray-600'}`}>
-                    {(m.isPaid || isSelected) && <Check className="w-3 h-3 text-white" />}
+                    ${isSelected ? 'border-brand-500 bg-brand-500' : 'border-gray-600'}`}>
+                    {isSelected && <Check className="w-3 h-3 text-white" />}
                   </div>
                 </button>
               )
@@ -358,11 +342,11 @@ Por favor revisar y aprobar ✅`
           </div>
 
           {/* Total */}
-          {selectedMonths.length > 0 && (
+          {selectedCycles.length > 0 && (
             <div className="flex items-center justify-between bg-gray-800/50 rounded-xl px-4 py-3">
               <div>
                 <p className="text-xs text-gray-500">Total a pagar</p>
-                <p className="text-xs text-gray-400">{selectedMonths.length} cuota{selectedMonths.length > 1 ? 's' : ''}</p>
+                <p className="text-xs text-gray-400">{selectedCycles.length} ciclo{selectedCycles.length > 1 ? 's' : ''}</p>
               </div>
               <span className="text-2xl font-bold text-brand-400">{formatCurrency(totalAmount)}</span>
             </div>
@@ -407,7 +391,7 @@ Por favor revisar y aprobar ✅`
           </div>
 
           <button className="btn-primary w-full" onClick={handleSubmit}
-            disabled={uploading || !selectedMonths.length || !file}>
+            disabled={uploading || !selectedCycles.length || !file}>
             {uploading
               ? <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />Subiendo comprobante...</>
               : <><CreditCard className="w-4 h-4" />Enviar pago al administrador</>
