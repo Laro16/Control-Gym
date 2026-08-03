@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, CreditCard,
-  TrendingUp, Calendar, ClipboardList, X, Camera
+  TrendingUp, Calendar, ClipboardList, X
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -95,6 +95,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     { id: 'streak',     label: 'Racha',     icon: Calendar },
     { id: 'plans',      label: 'Planes',    icon: ClipboardList },
   ]
+  const mobileTabs = [tabs[1], tabs[2], tabs[0], tabs[3], tabs[4]]
 
   if (!loading && member && member.status !== 'active') {
     return (
@@ -115,8 +116,8 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
 
   return (
     <div className="min-h-dvh bg-gray-950 flex flex-col">
-      <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-4 py-3 flex items-center justify-between">
+      <header className="member-header bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/70 sticky top-0 z-40">
+        <div className="max-w-2xl mx-auto px-4 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {gymLogo ? (
               <img src={gymLogo} alt="logo" className="h-8 w-auto object-contain max-w-[120px]" />
@@ -144,10 +145,10 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
               {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
             </button>
             {/* Avatar / cuenta */}
-            <button className="btn-ghost p-1" onClick={() => { setShowAccount(!showAccount); setShowNotifs(false) }}>
+            <button className="btn-ghost p-0.5 rounded-full" onClick={() => { setShowAccount(!showAccount); setShowNotifs(false) }} aria-label="Abrir mi cuenta">
               {profile.avatar_url
-                ? <img src={profile.avatar_url} alt="avatar" className="w-8 h-8 rounded-full object-cover border-2 border-brand-500/40" />
-                : <div className="w-8 h-8 rounded-full bg-brand-500/20 border border-brand-500/30 flex items-center justify-center">
+                ? <img src={profile.avatar_url} alt="avatar" className="w-9 h-9 rounded-full object-cover border-2 border-brand-500/50" />
+                : <div className="w-9 h-9 rounded-full bg-brand-500/20 border border-brand-500/40 flex items-center justify-center">
                     <span className="text-brand-400 text-sm font-bold">{profile.full_name?.[0]?.toUpperCase()}</span>
                   </div>
               }
@@ -195,10 +196,10 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       </nav>
 
       <PullToRefresh onRefresh={loadData}>
-      <main className="flex-1 max-w-2xl mx-auto w-full px-4 pt-6 pb-28 md:pb-6">
+      <main className="flex-1 max-w-2xl mx-auto w-full px-4 pt-5 pb-32 md:pt-6 md:pb-6">
         {loading ? <PageSkeleton /> : (
           <>
-            {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} attendance={attendance} streakOptions={streakOptions} onNavigate={setTab} />}
+            {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} attendance={attendance} streakOptions={streakOptions} onNavigate={switchTab} />}
             {tab === 'payments' && <UserPayments payments={payments} member={member} onRefresh={loadData} />}
             {tab === 'body'     && <UserBody measurements={measurements} photos={photos} member={member} onRefresh={loadData} />}
             {tab === 'streak'   && <UserStreak attendance={attendance} member={member} payments={payments} onRefresh={loadData} profile={profile} streakOptions={streakOptions} />}
@@ -210,26 +211,40 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
 
       {/* BOTTOM NAV — solo móvil, estilo app nativa */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-gray-900/95 backdrop-blur-lg border-t border-gray-800 lm-nav"
-        style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+        className="md:hidden fixed left-3 right-3 z-40 bg-gray-900/95 backdrop-blur-xl border border-gray-700/80 rounded-[24px] shadow-2xl shadow-black/40 lm-nav"
+        style={{ bottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
       >
-        <div className="grid grid-cols-5 max-w-2xl mx-auto">
-          {tabs.map(t => {
+        <div className="grid grid-cols-5 max-w-2xl mx-auto h-16 px-1">
+          {mobileTabs.map(t => {
             const active = tab === t.id
+            const primary = t.id === 'home'
             return (
               <button
                 key={t.id}
                 onClick={() => switchTab(t.id)}
-                className="relative flex flex-col items-center justify-center gap-0.5 py-2 active:scale-90 transition-transform"
+                className="relative flex flex-col items-center justify-center gap-0.5 active:scale-90 transition-transform"
               >
-                <span className={`absolute top-0 h-0.5 w-8 rounded-full transition-all ${active ? 'bg-brand-500' : 'bg-transparent'}`} />
-                <t.icon
-                  className={`w-5 h-5 transition-colors ${active ? 'text-brand-400' : 'text-gray-500'}`}
-                  strokeWidth={active ? 2.4 : 2}
-                />
-                <span className={`text-[10px] font-medium transition-colors ${active ? 'text-brand-400' : 'text-gray-600'}`}>
-                  {t.label}
-                </span>
+                {primary ? (
+                  <>
+                    <span className={`member-nav-primary w-14 h-14 -mt-7 rounded-[20px] flex items-center justify-center border-4 border-gray-950 shadow-xl transition-all ${
+                      active ? 'bg-brand-500 text-white shadow-brand-500/30' : 'bg-gray-800 text-gray-400'
+                    }`}>
+                      <t.icon className="w-6 h-6" strokeWidth={2.4} />
+                    </span>
+                    <span className={`text-[10px] font-semibold -mt-0.5 ${active ? 'text-brand-400' : 'text-gray-500'}`}>{t.label}</span>
+                  </>
+                ) : (
+                  <>
+                    <t.icon
+                      className={`w-5 h-5 transition-colors ${active ? 'text-brand-400' : 'text-gray-500'}`}
+                      strokeWidth={active ? 2.4 : 2}
+                    />
+                    <span className={`text-[10px] font-medium transition-colors ${active ? 'text-brand-400' : 'text-gray-600'}`}>
+                      {t.label}
+                    </span>
+                    <span className={`absolute bottom-1 h-1 w-1 rounded-full ${active ? 'bg-brand-500' : 'bg-transparent'}`} />
+                  </>
+                )}
               </button>
             )
           })}
