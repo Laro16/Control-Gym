@@ -9,6 +9,7 @@ import {
 } from '../utils/helpers'
 import { useCountUp } from './shared'
 import { getAnnouncements } from '../supabase'
+import memberHeroImage from '../assets/member-hero-v2.webp'
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -105,6 +106,12 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
     <div className="space-y-6 animate-fade-in max-w-lg mx-auto">
       <div className="relative -mx-4 -mt-5 sm:mx-0 sm:mt-0">
         <section className="member-hero-v2 relative min-h-[370px] sm:min-h-[350px] overflow-hidden rounded-b-[38px] sm:rounded-[34px] p-5 sm:p-7 flex flex-col">
+          <img
+            src={memberHeroImage}
+            alt=""
+            aria-hidden="true"
+            className="member-hero-image absolute inset-0 w-full h-full object-cover"
+          />
           <div className="member-hero-v2-overlay absolute inset-0" />
 
           <div className="relative z-10 flex items-start justify-between gap-3">
