@@ -325,3 +325,64 @@ html, body {
 .light-mode .label { color: #475569 !important; }
 .light-mode .fill-white { fill: #0f172a !important; }
 .light-mode .fill-gray-500 { fill: #64748b !important; }
+
+/* ═══════════════════════════════════════════════════════════
+   INICIO DEL MIEMBRO — superficie protagonista y acciones
+   ═══════════════════════════════════════════════════════════ */
+.member-hero {
+  background:
+    radial-gradient(circle at 88% 12%, rgb(var(--brand-500) / 0.28), transparent 34%),
+    linear-gradient(145deg, #171b24 0%, #0b0e14 58%, #07090d 100%);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  box-shadow: 0 22px 50px rgb(0 0 0 / 0.28);
+}
+
+.member-hero-title { color: #ffffff; }
+.member-hero-copy { color: #cbd5e1; }
+.member-hero-muted { color: #94a3b8; }
+
+.member-streak-pill,
+.member-hero-stat {
+  background: rgb(255 255 255 / 0.065);
+  border: 1px solid rgb(255 255 255 / 0.08);
+  backdrop-filter: blur(8px);
+}
+
+.member-action-brand {
+  background:
+    radial-gradient(circle at 90% 15%, rgb(255 255 255 / 0.16), transparent 32%),
+    linear-gradient(145deg, rgb(var(--brand-500)) 0%, rgb(var(--brand-700)) 100%);
+  border: 1px solid rgb(var(--brand-400) / 0.45);
+  box-shadow: 0 16px 34px rgb(var(--brand-500) / 0.18);
+}
+
+.member-action-card {
+  -webkit-tap-highlight-color: transparent;
+}
+
+.member-action-card:hover {
+  transform: translateY(-2px);
+}
+
+.light-mode .member-hero {
+  background:
+    radial-gradient(circle at 88% 12%, rgb(var(--brand-500) / 0.3), transparent 34%),
+    linear-gradient(145deg, #1e293b 0%, #0f172a 62%, #111827 100%) !important;
+  border-color: rgb(15 23 42 / 0.16) !important;
+  box-shadow: 0 18px 38px rgb(15 23 42 / 0.18) !important;
+}
+
+.light-mode .member-hero-title,
+.light-mode .member-hero .text-white,
+.light-mode .member-action-brand .text-white {
+  color: #ffffff !important;
+}
+
+.light-mode .member-hero-copy { color: #cbd5e1 !important; }
+.light-mode .member-hero-muted { color: #94a3b8 !important; }
+.light-mode .member-action-brand { background: linear-gradient(145deg, rgb(var(--brand-500)), rgb(var(--brand-700))) !important; }
+.light-mode .member-nav-primary { border-color: #eef0f4 !important; }
+
+@media (prefers-reduced-motion: reduce) {
+  .member-action-card:hover { transform: none; }
+}
