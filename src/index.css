@@ -331,19 +331,20 @@ html, body {
    ═══════════════════════════════════════════════════════════ */
 .member-hero-v2 {
   background-color: #090b0f;
-  background-image: url('/member-hero-v2.webp');
-  background-position: 55% center;
-  background-repeat: no-repeat;
-  background-size: cover;
   border: 1px solid rgb(255 255 255 / 0.08);
   box-shadow: 0 26px 60px rgb(0 0 0 / 0.38);
 }
 
+.member-hero-image {
+  object-position: 62% center;
+  transform: scale(1.01);
+}
+
 .member-hero-v2-overlay {
   background:
-    linear-gradient(180deg, rgb(4 6 10 / 0.38) 0%, rgb(4 6 10 / 0.08) 28%, rgb(4 6 10 / 0.94) 100%),
-    linear-gradient(90deg, rgb(4 6 10 / 0.76) 0%, transparent 76%),
-    radial-gradient(circle at 18% 82%, rgb(var(--brand-500) / 0.24), transparent 42%);
+    linear-gradient(180deg, rgb(4 6 10 / 0.24) 0%, transparent 35%, rgb(4 6 10 / 0.88) 100%),
+    linear-gradient(90deg, rgb(4 6 10 / 0.62) 0%, rgb(4 6 10 / 0.08) 78%),
+    radial-gradient(circle at 18% 82%, rgb(var(--brand-500) / 0.18), transparent 42%);
 }
 
 .member-hero-glass {
@@ -424,7 +425,6 @@ html, body {
 
 .light-mode .member-hero-v2 {
   background-color: #090b0f !important;
-  background-image: url('/member-hero-v2.webp') !important;
   border-color: rgb(15 23 42 / 0.16) !important;
   box-shadow: 0 22px 46px rgb(15 23 42 / 0.22) !important;
 }
