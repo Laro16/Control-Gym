@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   Activity, AlertCircle, AlertTriangle, CalendarDays, CheckCircle,
-  ChevronRight, Clock, CreditCard, Dumbbell, Flame, Sparkles, TrendingUp
+  ChevronRight, Clock, CreditCard, Flame, TrendingUp
 } from 'lucide-react'
 import {
   addDays, calculateStreak, daysBetween, formatCurrency, formatDate,
@@ -103,52 +103,67 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
 
   return (
     <div className="space-y-6 animate-fade-in max-w-lg mx-auto">
-      <section className="member-hero relative overflow-hidden rounded-[28px] p-5 sm:p-6">
-        <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-brand-500/15 blur-2xl" />
-        <div className="absolute right-5 bottom-3 opacity-[0.07] rotate-[-12deg]">
-          <Dumbbell className="w-28 h-28 text-white" strokeWidth={1.5} />
-        </div>
+      <div className="relative -mx-4 -mt-5 sm:mx-0 sm:mt-0">
+        <section className="member-hero-v2 relative min-h-[370px] sm:min-h-[350px] overflow-hidden rounded-b-[38px] sm:rounded-[34px] p-5 sm:p-7 flex flex-col">
+          <div className="member-hero-v2-overlay absolute inset-0" />
 
-        <div className="relative z-10">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <p className="member-hero-muted text-xs font-semibold uppercase tracking-[0.18em]">
-                {getGreeting()}
-              </p>
-              <h1 className="member-hero-title text-3xl font-bold tracking-tight mt-1 truncate">
-                Hola, {firstName}
-              </h1>
-              <p className="member-hero-copy text-sm mt-2 max-w-[270px] leading-relaxed">
-                {getDayMessage(streak, markedToday)}
-              </p>
-            </div>
-
+          <div className="relative z-10 flex items-start justify-between gap-3">
+            <span className="member-hero-glass rounded-full px-3 py-2 text-[10px] font-bold uppercase tracking-[0.16em] text-white">
+              Hoy · {new Date(`${todayStr}T12:00:00`).toLocaleDateString('es-GT', { day: 'numeric', month: 'short' })}
+            </span>
             <button
               onClick={() => onNavigate?.('streak')}
-              className="member-streak-pill flex flex-col items-center min-w-[66px] rounded-2xl px-3 py-2.5 active:scale-95 transition-transform"
+              className="member-hero-glass flex items-center gap-1.5 rounded-full px-3 py-2 active:scale-95 transition-transform"
               aria-label="Ver mi racha"
             >
               <Flame
-                className={`w-6 h-6 ${markedToday ? 'text-brand-400 animate-flicker' : 'text-gray-500'}`}
+                className={`w-4 h-4 ${markedToday ? 'text-brand-400 animate-flicker' : 'text-white/70'}`}
                 fill={markedToday ? 'currentColor' : 'none'}
               />
-              <strong className="member-hero-title text-lg tabular-nums leading-none mt-1">{displayStreak}</strong>
-              <span className="member-hero-muted text-[9px] uppercase tracking-wide">días</span>
+              <strong className="text-sm text-white tabular-nums">{displayStreak}</strong>
+              <span className="text-[10px] text-white/70">días</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 mt-6 max-w-xs">
-            <div className="member-hero-stat rounded-xl px-3 py-2.5">
-              <p className="member-hero-muted text-[10px] uppercase tracking-wide">Esta semana</p>
-              <p className="member-hero-title font-semibold mt-0.5">{weeklyCount} entrenamientos</p>
-            </div>
-            <div className="member-hero-stat rounded-xl px-3 py-2.5">
-              <p className="member-hero-muted text-[10px] uppercase tracking-wide">Plan actual</p>
-              <p className="member-hero-title font-semibold mt-0.5 truncate">{member?.plan?.name || 'Sin plan'}</p>
-            </div>
+          <div className="relative z-10 mt-auto max-w-[340px]">
+            <p className="text-sm font-medium text-white/70">{getGreeting()}</p>
+            <h1 className="text-4xl sm:text-[42px] leading-none font-black tracking-[-0.035em] text-white mt-1">
+              Hola, {firstName}
+            </h1>
+            <p className="text-sm sm:text-base text-white/80 mt-3 leading-relaxed max-w-[310px]">
+              {getDayMessage(streak, markedToday)}
+            </p>
+            <button
+              onClick={() => onNavigate?.('streak')}
+              className="member-checkin-cta mt-5 w-full sm:w-auto rounded-2xl px-4 py-3.5 flex items-center justify-center gap-3 text-white font-bold active:scale-[0.98] transition-transform"
+            >
+              {markedToday
+                ? <CheckCircle className="w-5 h-5" />
+                : <Activity className="w-5 h-5" />}
+              <span>{markedToday ? 'Asistencia registrada' : 'Registrar asistencia'}</span>
+              <ChevronRight className="w-4 h-4 ml-auto sm:ml-3" />
+            </button>
           </div>
+        </section>
+
+        <div className="member-floating-summary relative z-20 grid grid-cols-3 gap-2 -mt-8 mx-4 sm:mx-5">
+          <button onClick={() => onNavigate?.('streak')} className="member-floating-stat rounded-2xl px-2 py-3 text-center active:scale-95 transition-transform">
+            <Flame className="w-4 h-4 text-brand-400 mx-auto" />
+            <strong className="block text-base text-white mt-1 tabular-nums">{displayStreak}</strong>
+            <span className="block text-[9px] text-gray-500 uppercase tracking-wide">Racha</span>
+          </button>
+          <button onClick={() => onNavigate?.('streak')} className="member-floating-stat rounded-2xl px-2 py-3 text-center active:scale-95 transition-transform">
+            <Activity className="w-4 h-4 text-emerald-400 mx-auto" />
+            <strong className="block text-base text-white mt-1 tabular-nums">{weeklyCount}</strong>
+            <span className="block text-[9px] text-gray-500 uppercase tracking-wide">Semana</span>
+          </button>
+          <button onClick={() => onNavigate?.('plans')} className="member-floating-stat rounded-2xl px-2 py-3 text-center active:scale-95 transition-transform">
+            <CalendarDays className="w-4 h-4 text-sky-400 mx-auto" />
+            <strong className="block text-sm text-white mt-1 truncate">{member?.plan?.name || 'Sin plan'}</strong>
+            <span className="block text-[9px] text-gray-500 uppercase tracking-wide">Plan</span>
+          </button>
         </div>
-      </section>
+      </div>
 
       {warning && (
         <div className="rounded-2xl px-4 py-3 flex items-center gap-3 bg-yellow-500/10 border border-yellow-500/20 text-yellow-400">
@@ -158,81 +173,65 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
       )}
 
       <section>
-        <div className="flex items-end justify-between mb-3">
+        <div className="flex items-center justify-between mb-4">
           <div>
-            <p className="text-[10px] text-brand-400 font-bold uppercase tracking-[0.2em]">Tu gimnasio</p>
-            <h2 className="text-xl font-bold text-white mt-0.5">Accesos rápidos</h2>
+            <p className="text-[10px] text-brand-400 font-bold uppercase tracking-[0.2em]">Todo en un lugar</p>
+            <h2 className="text-2xl font-bold text-white mt-0.5">Explora</h2>
           </div>
-          <Sparkles className="w-5 h-5 text-brand-400/70" />
+          <span className="text-xs text-gray-500">Accesos rápidos</span>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            onClick={() => onNavigate?.('streak')}
-            className="member-action-card member-action-brand relative overflow-hidden rounded-3xl p-4 min-h-[154px] text-left active:scale-[0.98] transition-transform"
-          >
-            <Flame className="absolute -right-3 -bottom-4 w-24 h-24 text-white/10" fill="currentColor" />
-            <div className="relative h-full flex flex-col">
-              <div className="w-10 h-10 rounded-2xl bg-white/15 flex items-center justify-center">
-                {markedToday
-                  ? <CheckCircle className="w-5 h-5 text-white" />
-                  : <Activity className="w-5 h-5 text-white" />}
-              </div>
-              <div className="mt-auto pt-5">
-                <p className="text-white font-bold text-lg">{markedToday ? '¡Listo por hoy!' : 'Check-in'}</p>
-                <p className="text-white/70 text-xs mt-0.5">
-                  {markedToday ? 'Asistencia registrada' : 'Escanea el QR del gym'}
-                </p>
-              </div>
-            </div>
+        <div className="grid grid-cols-4 gap-2 sm:gap-3">
+          <button onClick={() => onNavigate?.('payments')} className="member-explore-button group text-center active:scale-95 transition-transform">
+            <span className="member-explore-icon member-explore-payments">
+              <CreditCard className="w-6 h-6" />
+            </span>
+            <strong className="block text-xs text-white mt-2">Pagos</strong>
           </button>
-
-          <button
-            onClick={() => onNavigate?.('payments')}
-            className="member-action-card card relative overflow-hidden rounded-3xl p-4 min-h-[154px] text-left active:scale-[0.98] transition-transform"
-          >
-            <CreditCard className="absolute -right-4 -bottom-5 w-24 h-24 text-gray-700/20" />
-            <div className="relative h-full flex flex-col">
-              <div className="w-10 h-10 rounded-2xl bg-gray-800 border border-gray-700 flex items-center justify-center">
-                <PaymentStatusIcon status={payStatus} className="w-5 h-5" />
-              </div>
-              <div className="mt-auto pt-5">
-                <p className="text-white font-bold text-lg">Mis pagos</p>
-                <p className={`text-xs font-semibold mt-0.5 ${
-                  payStatus === 'overdue' ? 'text-red-400' :
-                  payStatus === 'current' ? 'text-emerald-400' :
-                  payStatus === 'due_soon' || payStatus === 'pending_approval' ? 'text-yellow-400' : 'text-gray-400'
-                }`}>
-                  {statusLabel?.text || 'Ver historial'}
-                </p>
-                <p className="text-[10px] text-gray-500 mt-1 truncate">{paymentSubtext()}</p>
-              </div>
-            </div>
+          <button onClick={() => onNavigate?.('body')} className="member-explore-button group text-center active:scale-95 transition-transform">
+            <span className="member-explore-icon member-explore-progress">
+              <TrendingUp className="w-6 h-6" />
+            </span>
+            <strong className="block text-xs text-white mt-2">Progreso</strong>
+          </button>
+          <button onClick={() => onNavigate?.('streak')} className="member-explore-button group text-center active:scale-95 transition-transform">
+            <span className="member-explore-icon member-explore-streak">
+              <Flame className="w-6 h-6" />
+            </span>
+            <strong className="block text-xs text-white mt-2">Racha</strong>
+          </button>
+          <button onClick={() => onNavigate?.('plans')} className="member-explore-button group text-center active:scale-95 transition-transform">
+            <span className="member-explore-icon member-explore-plan">
+              <CalendarDays className="w-6 h-6" />
+            </span>
+            <strong className="block text-xs text-white mt-2">Mi plan</strong>
           </button>
         </div>
       </section>
 
-      {(payStatus === 'overdue' || payStatus === 'due_soon' || payStatus === 'new_member') && (
-        <button
-          onClick={() => onNavigate?.('payments')}
-          className={`w-full rounded-2xl px-4 py-3 flex items-center gap-3 border text-left active:scale-[0.99] transition-transform ${
-            payStatus === 'overdue'
-              ? 'bg-red-500/10 border-red-500/20'
-              : payStatus === 'due_soon'
-                ? 'bg-yellow-500/10 border-yellow-500/20'
-                : 'bg-brand-500/10 border-brand-500/20'
-          }`}
-        >
-          <PaymentStatusIcon status={payStatus} className="w-5 h-5" />
-          <div className="flex-1">
-            <p className="text-sm font-semibold text-white">
-              {payStatus === 'overdue' ? 'Tu cuota está vencida' : payStatus === 'due_soon' ? 'Tu cuota vence pronto' : 'Registra tu primer pago'}
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">Toca para ver los detalles</p>
-          </div>
-          <ChevronRight className="w-4 h-4 text-gray-500" />
-        </button>
-      )}
+      <button
+        onClick={() => onNavigate?.('payments')}
+        className={`member-payment-panel w-full rounded-3xl p-4 flex items-center gap-3 border text-left active:scale-[0.99] transition-transform ${
+          payStatus === 'overdue'
+            ? 'border-red-500/25'
+            : payStatus === 'due_soon' || payStatus === 'pending_approval'
+              ? 'border-yellow-500/25'
+              : 'border-gray-800'
+        }`}
+      >
+        <span className="member-payment-icon w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0">
+          <PaymentStatusIcon status={payStatus} className="w-6 h-6" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block text-[10px] text-gray-500 uppercase tracking-[0.16em]">Membresía</span>
+          <strong className="block text-base text-white mt-0.5 truncate">{statusLabel?.text || 'Mis pagos'}</strong>
+          <small className="block text-xs text-gray-500 mt-0.5 truncate">{paymentSubtext()}</small>
+        </span>
+        <span className="text-right flex-shrink-0">
+          {lastApproved?.amount && <strong className="block text-sm text-white">{formatCurrency(lastApproved.amount)}</strong>}
+          <ChevronRight className="w-4 h-4 text-gray-500 ml-auto mt-1" />
+        </span>
+      </button>
 
       <section className="card rounded-3xl p-4 sm:p-5">
         <div className="flex items-center justify-between mb-4">
@@ -262,33 +261,6 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
               </div>
             </div>
           ))}
-        </div>
-      </section>
-
-      <section>
-        <h2 className="text-lg font-bold text-white mb-3">Tu espacio</h2>
-        <div className="grid grid-cols-2 gap-3">
-          <button onClick={() => onNavigate?.('body')} className="card rounded-2xl p-4 flex items-center gap-3 text-left active:scale-[0.98] transition-transform">
-            <span className="w-10 h-10 rounded-2xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-              <TrendingUp className="w-5 h-5 text-emerald-400" />
-            </span>
-            <span className="min-w-0">
-              <strong className="block text-sm text-white">Mi progreso</strong>
-              <small className="block text-[10px] text-gray-500 truncate">Medidas y fotos</small>
-            </span>
-          </button>
-
-          <button onClick={() => onNavigate?.('plans')} className="card rounded-2xl p-4 flex items-center gap-3 text-left active:scale-[0.98] transition-transform">
-            <span className="w-10 h-10 rounded-2xl bg-brand-500/10 flex items-center justify-center flex-shrink-0">
-              <CalendarDays className="w-5 h-5 text-brand-400" />
-            </span>
-            <span className="min-w-0">
-              <strong className="block text-sm text-white">Mi plan</strong>
-              <small className="block text-[10px] text-gray-500 truncate">
-                {member?.plan?.price ? `${formatCurrency(member.plan.price)} · ${member.plan.duration_days || 30} días` : 'Ver opciones'}
-              </small>
-            </span>
-          </button>
         </div>
       </section>
 
