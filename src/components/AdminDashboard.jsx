@@ -149,7 +149,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     <div className="min-h-dvh bg-gray-950 flex flex-col">
 
       {/* ── HEADER ───────────────────────────────────────── */}
-      <header className="bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
+      <header className="admin-header bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
 
           {/* Logo */}
@@ -294,16 +294,16 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
       </header>
 
       {/* ── NAV TABS ─────────────────────────────────────── */}
-      <nav className="lm-nav border-b border-gray-800 sticky top-[57px] z-30">
+      <nav className="admin-nav lm-nav border-b border-gray-800 sticky top-[57px] z-30">
         <div className="max-w-6xl mx-auto px-4">
-          <div className="flex gap-1 overflow-x-auto py-1 no-scrollbar">
+          <div className="flex gap-1.5 overflow-x-auto py-2 no-scrollbar">
             {tabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-all
+                className={`admin-nav-item flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all
                   ${tab === t.id
-                    ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                    ? 'admin-nav-active bg-brand-500/10 text-brand-400 border border-brand-500/20'
                     : 'text-gray-400 hover:text-white hover:bg-gray-800 lm-tab-inactive'}`}
               >
                 <t.icon className="w-4 h-4" />
@@ -316,7 +316,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
 
       {/* ── CONTENIDO ────────────────────────────────────── */}
       <PullToRefresh onRefresh={loadData}>
-      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-6">
+      <main className="flex-1 max-w-6xl mx-auto w-full px-4 py-5 sm:py-7">
         {loading ? <PageSkeleton /> : (
           <>
             {tab === 'overview' && (
