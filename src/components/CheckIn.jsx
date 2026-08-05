@@ -6,7 +6,8 @@ import { applyGymTheme } from '../utils/theme'
 import Login from './Login'
 
 // Estados posibles del check-in
-// 'working' | 'success' | 'already' | 'wrong_gym' | 'no_member' | 'admin' | 'error'
+// 'working' | 'success' | 'already' | 'wrong_gym' | 'overdue_blocked' |
+// 'no_member' | 'no_plan' | 'admin' | 'error'
 
 export function CheckIn({ code, profile, onExit }) {
   const [state, setState]   = useState('working')
@@ -21,9 +22,9 @@ export function CheckIn({ code, profile, onExit }) {
     const run = async () => {
       try {
         // 1) Cargar el gimnasio del propio usuario y validar el código
-        const { data: gym } = await getMyGym(profile.gym_id)
+        const { data: gym, error: gymError } = await getMyGym(profile.gym_id)
         if (cancelled) return
-        if (!gym) { setState('error'); return }
+        if (gymError || !gym) { setState('error'); return }
         setGymName(gym.name)
         applyGymTheme(gym.primary_color)
 
@@ -31,19 +32,20 @@ export function CheckIn({ code, profile, onExit }) {
         if (profile.role === 'admin') { setState('admin'); return }
 
         // 3) Buscar la ficha de miembro
-        const { data: member } = await supabase
+        const { data: member, error: memberError } = await supabase
           .from('members')
           .select('*, plan:plans(*)')
           .eq('profile_id', profile.id)
           .single()
         if (cancelled) return
-        if (!member) { setState('no_member'); return }
+        if (memberError || !member) { setState(memberError?.code === 'PGRST116' ? 'no_member' : 'error'); return }
         if (member.status !== 'active') { setState('inactive'); return }
 
         // Nota de cuota vencida (no bloquea el check-in)
-        const { data: payments } = await supabase
+        const { data: payments, error: paymentsError } = await supabase
           .from('payments').select('*').eq('member_id', member.id)
         if (cancelled) return
+        if (paymentsError) { setState('error'); return }
         setOverdue(getMemberPaymentStatus(member, payments || []) === 'overdue')
 
         // 4) Registrar en el servidor. Allí se valida el QR, estado del
@@ -51,8 +53,11 @@ export function CheckIn({ code, profile, onExit }) {
         const { data: result, error: checkinError } = await registerCheckin(code)
         if (cancelled) return
         if (checkinError) {
-          if (checkinError.message?.toLowerCase().includes('codigo')) setState('wrong_gym')
-          else if (checkinError.message?.toLowerCase().includes('activa')) setState('inactive')
+          const message = checkinError.message?.toLowerCase() || ''
+          if (message.includes('código') || message.includes('codigo')) setState('wrong_gym')
+          else if (message.includes('cuota vencida')) setState('overdue_blocked')
+          else if (message.includes('plan activo')) setState('no_plan')
+          else if (message.includes('activa') || message.includes('activo')) setState('inactive')
           else setState('error')
           return
         }
@@ -135,11 +140,29 @@ export function CheckIn({ code, profile, onExit }) {
             </div>
           )}
 
+          {state === 'no_plan' && (
+            <div className="py-6">
+              <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
+              <h1 className="text-lg font-semibold text-white">No tienes un plan activo</h1>
+              <p className="text-gray-500 text-sm mt-1">Solicita un plan en recepción para registrar tu asistencia.</p>
+            </div>
+          )}
+
           {state === 'inactive' && (
             <div className="py-6">
               <XCircle className="w-12 h-12 text-red-400 mx-auto mb-3" />
               <h1 className="text-lg font-semibold text-white">Membresía inactiva</h1>
               <p className="text-gray-500 text-sm mt-1">Habla con recepción para reactivar tu acceso.</p>
+            </div>
+          )}
+
+          {state === 'overdue_blocked' && (
+            <div className="py-6">
+              <AlertCircle className="w-12 h-12 text-yellow-400 mx-auto mb-3" />
+              <h1 className="text-lg font-semibold text-white">Cuota vencida</h1>
+              <p className="text-gray-500 text-sm mt-1">
+                Este gimnasio requiere estar al día para registrar asistencia. Regulariza tu pago en recepción.
+              </p>
             </div>
           )}
 

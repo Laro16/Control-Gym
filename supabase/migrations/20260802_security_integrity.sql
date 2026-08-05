@@ -535,6 +535,46 @@ grant execute on function public.delete_member_data(uuid, uuid) to service_role;
 drop policy if exists allow_authenticated_upload on storage.objects;
 drop policy if exists allow_authenticated_read on storage.objects;
 
+-- Avatares y logos son recursos publicos de presentacion. Comprobantes y
+-- fotos corporales contienen informacion privada y nunca deben ser publicos.
+update storage.buckets set public = true
+where id in ('avatars', 'logos');
+update storage.buckets set public = false
+where id in ('progress', 'vouchers');
+
+-- Inventario real recibido el 2026-08-02. Algunos nombres fueron generados
+-- por el Dashboard con sufijos y barras invertidas, por eso se eliminan de
+-- forma segura con format('%I'). Todas estas politicas eran generales para
+-- el bucket y se sustituyen abajo por permisos por usuario/gimnasio.
+do $$
+declare
+  v_policy text;
+begin
+  for v_policy in
+    select unnest(array[
+      'Nombre: allow\_authenticated\_read 1ih3h2l_0',
+      'Nombre: allow\_authenticated\_upload 1ih3h2l_0',
+      'allow\_authenticated\_read 183bix1_0',
+      'allow\_authenticated\_upload 183bix1_0',
+      'avatars_auth_delete',
+      'avatars_auth_update',
+      'avatars_auth_upload',
+      'avatars_public_read',
+      'logos_auth_upload 1peuqw_0',
+      'logos_public_read 1peuqw_0',
+      'progress_auth_update',
+      'progress_auth_upload',
+      'progress_public_read',
+      'vouchers_auth_update',
+      'vouchers_auth_upload',
+      'vouchers_public_read'
+    ]::text[])
+  loop
+    execute format('drop policy if exists %I on storage.objects', v_policy);
+  end loop;
+end;
+$$;
+
 drop policy if exists vouchers_read_scoped on storage.objects;
 drop policy if exists vouchers_write_scoped on storage.objects;
 drop policy if exists vouchers_update_scoped on storage.objects;

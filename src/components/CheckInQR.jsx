@@ -2,14 +2,17 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
 import { QrCode, Printer, Download, RefreshCw, Check, Copy, AlertCircle, MonitorSmartphone } from 'lucide-react'
 import { getMyGym, updateGym } from '../supabase'
-import { Spinner } from './shared'
+import { Spinner, toast } from './shared'
 
 function randomCode() {
-  // 10 caracteres alfanuméricos
-  return Array.from({ length: 10 }, () =>
-    'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]
-  ).join('')
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('')
 }
+
+const escapeHtml = value => String(value || '').replace(/[&<>"']/g, character => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
+})[character])
 
 export function CheckInQR({ profile }) {
   const [gym, setGym]         = useState(null)
@@ -33,9 +36,10 @@ export function CheckInQR({ profile }) {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await getMyGym(profile.gym_id)
+    const { data, error } = await getMyGym(profile.gym_id)
     setGym(data || null)
     setLoading(false)
+    if (error) toast.error(error.message || 'No se pudo cargar el gimnasio')
   }, [profile.gym_id])
 
   useEffect(() => { load() }, [load])
@@ -66,9 +70,10 @@ export function CheckInQR({ profile }) {
     if (!canvas) return
     const dataUrl = canvas.toDataURL('image/png')
     const w = window.open('', '_blank', 'width=600,height=800')
-    if (!w) return
+    if (!w) { toast.info('Permite las ventanas emergentes para imprimir'); return }
+    const safeGymName = escapeHtml(gym.name)
     w.document.write(`
-      <html><head><title>Check-in ${gym.name}</title>
+      <html><head><title>Check-in ${safeGymName}</title>
       <style>
         body{font-family:system-ui,sans-serif;text-align:center;padding:48px 24px;color:#111}
         h1{font-size:28px;margin:0 0 4px}
@@ -77,7 +82,7 @@ export function CheckInQR({ profile }) {
         .foot{margin-top:28px;font-size:15px;color:#333}
       </style></head>
       <body>
-        <h1>${gym.name}</h1>
+        <h1>${safeGymName}</h1>
         <p>Escanea para registrar tu asistencia</p>
         <img src="${dataUrl}" />
         <p class="foot">Apunta la cámara de tu teléfono al código</p>
@@ -92,16 +97,23 @@ export function CheckInQR({ profile }) {
       await navigator.clipboard.writeText(checkinUrl)
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
-    } catch { /* sin portapapeles */ }
+    } catch { toast.info('No se pudo copiar el enlace') }
   }
 
   const handleRegenerate = async () => {
     setBusy(true)
     const newCode = randomCode()
-    const { data } = await updateGym(profile.gym_id, { checkin_code: newCode })
-    if (data) setGym(data)
-    setConfirmRegen(false)
-    setBusy(false)
+    try {
+      const { data, error } = await updateGym(profile.gym_id, { checkin_code: newCode })
+      if (error) throw error
+      if (data) setGym(data)
+      setConfirmRegen(false)
+      toast.success('Código de check-in regenerado')
+    } catch (error) {
+      toast.error(error.message || 'No se pudo regenerar el código')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (

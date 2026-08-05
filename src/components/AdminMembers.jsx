@@ -11,7 +11,7 @@ import { playNotifSound, playAchievementSound } from '../App'
 import {
   supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
-  createPayment, updatePayment, createMeasurement,
+  createMeasurement,
   updateMember, getPlans, createPlan, updatePlan,  
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
@@ -133,6 +133,7 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
   const loadAttendance = async () => {
     const a = await getAttendance(member.id)
     setAttendance(a.data || [])
+    if (a.error) toast.error(a.error.message || 'No se pudo cargar la asistencia')
   }
 
   useEffect(() => {
@@ -147,6 +148,8 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
       setPhotos(p.data || [])
       setAttendance(a.data || [])
       setLoadingData(false)
+      const firstError = m.error || p.error || a.error
+      if (firstError) toast.error(firstError.message || 'No se pudieron cargar todos los datos del miembro')
     }
     load()
   }, [member.id])
@@ -178,8 +181,9 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
 
       {!loadingData && tab === 'info' && (
         <EditMemberForm member={member} plans={plans} onSave={async (updates) => {
-          await updateMember(member.id, updates)
-          onRefresh()
+          const { error } = await updateMember(member.id, updates)
+          if (error) throw error
+          await onRefresh()
         }} />
       )}
 
@@ -196,8 +200,10 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
           )}
           <Modal open={showMeasForm} onClose={() => setShowMeasForm(false)} title="Nueva medición">
             <MeasurementForm memberId={member.id} onSave={async (data) => {
-              await createMeasurement({ ...data, member_id: member.id })
+              const { error } = await createMeasurement({ ...data, member_id: member.id })
+              if (error) throw error
               const m = await getMeasurements(member.id)
+              if (m.error) throw m.error
               setMeasurements(m.data || [])
               setShowMeasForm(false)
             }} />
@@ -245,16 +251,30 @@ function AttendanceManager({ memberId, attendance, onChange }) {
   const mark = async () => {
     if (!date || marked.has(date)) return
     setBusy(true)
-    await markAttendance(memberId, date)
-    await onChange()
-    setBusy(false)
+    try {
+      const { error } = await markAttendance(memberId, date)
+      if (error) throw error
+      await onChange()
+      toast.success('Asistencia registrada')
+    } catch (error) {
+      toast.error(error.message || 'No se pudo registrar la asistencia')
+    } finally {
+      setBusy(false)
+    }
   }
 
   const remove = async (d) => {
     setBusy(true)
-    await removeAttendance(memberId, d)
-    await onChange()
-    setBusy(false)
+    try {
+      const { error } = await removeAttendance(memberId, d)
+      if (error) throw error
+      await onChange()
+      toast.success('Asistencia eliminada')
+    } catch (error) {
+      toast.error(error.message || 'No se pudo eliminar la asistencia')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -315,15 +335,21 @@ function EditMemberForm({ member, plans, onSave }) {
 
   const handleSave = async () => {
     setSaving(true)
-    await onSave(form)
-    setSaving(false)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2000)
+    try {
+      await onSave(form)
+      setSaved(true)
+      toast.success('Datos del miembro actualizados')
+      setTimeout(() => setSaved(false), 2000)
+    } catch (error) {
+      toast.error(error.message || 'No se pudieron guardar los cambios')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">Estado</label>
           <select className="input" value={form.status} onChange={e => setForm({ ...form, status: e.target.value })}>
@@ -446,8 +472,14 @@ function MeasurementForm({ memberId, onSave }) {
     if (lbsInput.weight_kg) {
       toSave.weight_kg = (parseFloat(lbsInput.weight_kg) / 2.20462).toFixed(2)
     }
-    await onSave(toSave)
-    setSaving(false)
+    try {
+      await onSave(toSave)
+      toast.success('Medidas guardadas')
+    } catch (error) {
+      toast.error(error.message || 'No se pudieron guardar las medidas')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -458,7 +490,7 @@ function MeasurementForm({ memberId, onSave }) {
           onChange={e => setForm({ ...form, measured_at: e.target.value })} />
       </div>
       <p className="text-xs text-gray-500">Llena solo los campos que mediste. Deja vacío lo que no midió.</p>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {measurementFields.map(f => (
           <div key={f.key}>
             <label className="label">{f.label} ({f.unit})</label>

@@ -1,20 +1,28 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import {
   Users, CreditCard, Check, X, Download,
   AlertCircle, Clock, AlertTriangle, MessageCircle,
   ChevronDown, ChevronUp, Phone, Calendar, Layers,
   UserPlus, QrCode, FileText, ChevronRight, ArrowUpRight
 } from 'lucide-react'
-import { updatePayment, createNotification } from '../supabase'
+import { reviewPayment } from '../supabase'
 import {
   formatDate, formatCurrency, getMemberPaymentStatus,
   paymentStatusLabel, approvalStatusLabel, today
 } from '../utils/helpers'
 import { toast } from './shared'
 
+const whatsappNumber = phone => {
+  const digits = (phone || '').replace(/[^0-9]/g, '')
+  return digits.length === 8 ? `502${digits}` : digits
+}
+
 // ── OVERVIEW ───────────────────────────────────────────────
 export function AdminOverview({ members, payments, profile, onNavigate }) {
   const [filter, setFilter] = useState(null) // null | 'active' | 'pending' | 'overdue'
+  const [processingPayment, setProcessingPayment] = useState(null)
+  const pendingSectionRef = useRef(null)
+  const memberListRef = useRef(null)
 
   const active = members.filter(m => m.status === 'active').length
   const pendingPayments = payments.filter(p => p.status === 'pending')
@@ -48,6 +56,35 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
     : filter === 'overdue' ? overdueMembers
     : filter === 'pending' ? members.filter(m => pendingMemberIds.has(m.id))
     : members
+
+  const scrollToSection = ref => {
+    window.requestAnimationFrame(() => {
+      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    })
+  }
+
+  const handleFilter = id => {
+    const nextFilter = filter === id ? null : id
+    setFilter(nextFilter)
+    if (!nextFilter) return
+    scrollToSection(nextFilter === 'pending' ? pendingSectionRef : memberListRef)
+  }
+
+  const handlePaymentDecision = async (payment, status) => {
+    if (processingPayment) return
+    setProcessingPayment(payment.id)
+    try {
+      const { error } = await reviewPayment(payment.id, status)
+      if (error) throw error
+
+      toast.success(status === 'approved' ? 'Pago aprobado correctamente' : 'Pago rechazado')
+      await onNavigate('refresh')
+    } catch (error) {
+      toast.error(error.message || 'No se pudo actualizar el pago')
+    } finally {
+      setProcessingPayment(null)
+    }
+  }
 
   return (
     <div className="space-y-7 animate-fade-in">
@@ -121,7 +158,7 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
           {stats.map(s => (
             <button
               key={s.id}
-              onClick={() => s.clickable && setFilter(filter === s.id ? null : s.id)}
+              onClick={() => s.clickable && handleFilter(s.id)}
               className={`admin-kpi-card text-left rounded-2xl p-4 transition-all duration-200 ${s.clickable ? 'active:scale-95 cursor-pointer' : 'cursor-default'}
                 ${filter === s.id ? 'admin-kpi-active' : ''}`}
             >
@@ -156,7 +193,7 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
               </button>
             )}
             {overdueMembers.length > 0 && (
-              <button onClick={() => setFilter('overdue')} className="admin-attention-item rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
+              <button onClick={() => handleFilter('overdue')} className="admin-attention-item rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
                 <span className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center"><AlertTriangle className="w-5 h-5 text-red-400" /></span>
                 <span className="flex-1"><strong className="block text-sm text-white">{overdueMembers.length} cuotas vencidas</strong><small className="text-xs text-gray-500">Ver miembros y enviar recordatorios</small></span>
                 <ChevronRight className="w-4 h-4 text-gray-600" />
@@ -188,7 +225,7 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
 
       {/* Pagos pendientes — clicables para aprobar */}
       {filter === 'pending' || pendingPayments.length > 0 ? (
-        <div>
+        <div ref={pendingSectionRef} className="scroll-mt-32">
           <h3 className="font-semibold text-white mb-3 flex items-center gap-2">
             <Clock className="w-4 h-4 text-yellow-400" />
             Comprobantes pendientes ({pendingPayments.length})
@@ -212,26 +249,25 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
                     <div className="relative rounded-xl overflow-hidden bg-gray-800 group">
                       <img src={p.voucher_url} alt="comprobante" className="w-full max-h-40 object-cover" />
                       <a href={p.voucher_url} target="_blank" rel="noreferrer" download
-                        className="absolute top-2 right-2 bg-black/60 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        className="absolute top-2 right-2 bg-black/70 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
                         <Download className="w-3 h-3" /> Ver
                       </a>
                     </div>
                   )}
                   <div className="flex gap-2">
-                    <button className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold py-2 rounded-xl transition-all text-sm"
-                      onClick={async () => {
-                        await updatePayment(p.id, { status: 'approved', approved_at: new Date().toISOString() })
-                        await createNotification({ profile_id: p.member?.profile_id, type: 'payment_approved', title: 'Pago aprobado ✅', message: `Tu pago de ${formatCurrency(p.amount)} fue aprobado.` })
-                        onNavigate('refresh')
-                      }}>
-                      <Check className="w-4 h-4" /> Aprobar
+                    <button
+                      className="flex-1 flex items-center justify-center gap-2 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 font-semibold py-2 rounded-xl transition-all text-sm disabled:opacity-50"
+                      disabled={processingPayment === p.id}
+                      onClick={() => handlePaymentDecision(p, 'approved')}
+                    >
+                      <Check className="w-4 h-4" /> {processingPayment === p.id ? 'Procesando...' : 'Aprobar'}
                     </button>
-                    <button className="flex-1 flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold py-2 rounded-xl transition-all text-sm"
-                      onClick={async () => {
-                        await updatePayment(p.id, { status: 'rejected' })
-                        onNavigate('refresh')
-                      }}>
-                      <X className="w-4 h-4" /> Rechazar
+                    <button
+                      className="flex-1 flex items-center justify-center gap-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold py-2 rounded-xl transition-all text-sm disabled:opacity-50"
+                      disabled={processingPayment === p.id}
+                      onClick={() => handlePaymentDecision(p, 'rejected')}
+                    >
+                      <X className="w-4 h-4" /> {processingPayment === p.id ? 'Procesando...' : 'Rechazar'}
                     </button>
                   </div>
                 </div>
@@ -242,7 +278,9 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
       ) : null}
 
       {/* Lista de miembros filtrada — expandible */}
-      <MemberStatusList members={filteredMembers} payments={payments} filter={filter} setFilter={setFilter} />
+      <div ref={memberListRef} className="scroll-mt-32">
+        <MemberStatusList members={filteredMembers} payments={payments} filter={filter} setFilter={setFilter} />
+      </div>
     </div>
   )
 }
@@ -371,7 +409,7 @@ function MemberStatusList({ members, payments, filter, setFilter }) {
                   <div className="flex gap-2 pt-1">
                     {m.profile?.phone && (
                       <a
-                        href={`https://wa.me/${m.profile.phone.replace(/[^0-9]/g, '')}`}
+                        href={`https://wa.me/${whatsappNumber(m.profile.phone)}`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-emerald-500/10 text-emerald-400 text-xs font-medium hover:bg-emerald-500/20 transition-all"
@@ -384,7 +422,7 @@ function MemberStatusList({ members, payments, filter, setFilter }) {
                         className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-xl bg-brand-500/10 text-brand-400 text-xs font-medium hover:bg-brand-500/20 transition-all"
                         onClick={() => {
                           const msg = `Hola ${m.profile?.full_name?.split(' ')[0]}, te recordamos que tu cuota ${st === 'overdue' ? 'está vencida' : 'vence pronto'}. Por favor realiza tu pago. ¡Gracias! 🏋️`
-                          const num = (m.profile?.phone || '').replace(/[^0-9]/g, '')
+                          const num = whatsappNumber(m.profile?.phone)
                           if (num) window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank')
                           else toast.info('Este miembro no tiene teléfono registrado')
                         }}

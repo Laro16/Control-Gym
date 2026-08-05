@@ -7,7 +7,7 @@ import {
   addDays, calculateStreak, daysBetween, formatCurrency, formatDate,
   getMemberPaymentStatus, paymentStatusLabel, today
 } from '../utils/helpers'
-import { useCountUp } from './shared'
+import { useCountUp, toast } from './shared'
 import { getAnnouncements } from '../supabase'
 import memberHeroImage from '../assets/member-hero-v2.webp'
 
@@ -48,10 +48,11 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
   const [announcements, setAnnouncements] = useState([])
 
   useEffect(() => {
-    getAnnouncements().then(({ data }) => {
+    getAnnouncements().then(({ data, error }) => {
       const current = today()
       const valid = (data || []).filter(a => !a.expires_at || a.expires_at >= current)
       setAnnouncements(valid.slice(0, 3))
+      if (error) toast.error(error.message || 'No se pudieron cargar los anuncios')
     })
   }, [])
 
@@ -97,6 +98,7 @@ export function UserHome({ member, payments, profile, attendance, streakOptions,
       return `Día ${membershipDay} como miembro`
     }
     if (payStatus === 'pending_approval') return 'Comprobante en revisión'
+    if (payStatus === 'no_plan') return 'Solicita un plan en recepción'
     if (payStatus === 'no_payment') return 'Aún no hay pagos registrados'
     if (lastApproved) return `Vence ${formatDate(lastApproved.due_date)}`
     return 'Consulta tu historial'

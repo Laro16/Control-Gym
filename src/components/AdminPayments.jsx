@@ -11,7 +11,7 @@ import { playNotifSound, playAchievementSound } from '../App'
 import {
   supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
-  createPayment, updatePayment, createMeasurement,
+  reviewPayment, registerAdminPayment, createMeasurement,
   updateMember, getPlans, createPlan, updatePlan,
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
@@ -22,16 +22,18 @@ import {
   approvalStatusLabel, measurementFields, getMeasurementDiff,
   displayValue, getMeasurementComment, daysBetween,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
-  generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage
+  generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage,
+  getLastRegisteredDueDate
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner, EmptyState } from './shared'
+import { Modal, ConfirmModal, Spinner, EmptyState, toast } from './shared'
 
 // ── ADMIN PAYMENTS ─────────────────────────────────────────
-export function AdminPayments({ payments, onRefresh, profile }) {
+export function AdminPayments({ payments, onRefresh, gym }) {
   const [filter, setFilter] = useState('all')
   const [selectedMember, setSelectedMember] = useState(null)
   const [showCreateForm, setShowCreateForm] = useState(false)
+  const [processing, setProcessing] = useState(null)
 
   const filters = [
     { id: 'all', label: 'Todos' },
@@ -42,24 +44,19 @@ export function AdminPayments({ payments, onRefresh, profile }) {
 
   const filtered = filter === 'all' ? payments : payments.filter(p => p.status === filter)
 
-  const handleApprove = async (payment) => {
-    await updatePayment(payment.id, {
-      status: 'approved',
-      approved_by: profile.id,
-      approved_at: new Date().toISOString(),
-    })
-    await createNotification({
-      profile_id: payment.member?.profile?.id,
-      type: 'payment_approved',
-      title: 'Pago aprobado ✅',
-      message: `Tu pago de ${formatCurrency(payment.amount)} del ${formatDate(payment.due_date)} fue aprobado.`,
-    })
-    onRefresh()
-  }
-
-  const handleReject = async (payment) => {
-    await updatePayment(payment.id, { status: 'rejected' })
-    onRefresh()
+  const handleReview = async (payment, status) => {
+    if (processing) return
+    setProcessing(payment.id)
+    try {
+      const { error } = await reviewPayment(payment.id, status)
+      if (error) throw error
+      toast.success(status === 'approved' ? 'Pago aprobado correctamente' : 'Pago rechazado')
+      await onRefresh()
+    } catch (error) {
+      toast.error(error.message || 'No se pudo actualizar el pago')
+    } finally {
+      setProcessing(null)
+    }
   }
 
   return (
@@ -104,7 +101,7 @@ export function AdminPayments({ payments, onRefresh, profile }) {
                     }
                   </div>
                 </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center justify-end gap-1.5 flex-wrap flex-shrink-0">
                   {p.voucher_url && (
                     <a href={p.voucher_url} target="_blank" rel="noreferrer" className="btn-ghost p-1.5" title="Ver voucher">
                       <Eye className="w-4 h-4" />
@@ -112,10 +109,10 @@ export function AdminPayments({ payments, onRefresh, profile }) {
                   )}
                   {p.status === 'pending' && (
                     <>
-                      <button className="w-8 h-8 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center transition-all" onClick={() => handleApprove(p)} title="Aprobar">
+                      <button disabled={processing === p.id} className="w-8 h-8 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 rounded-lg flex items-center justify-center transition-all disabled:opacity-50" onClick={() => handleReview(p, 'approved')} title="Aprobar">
                         <Check className="w-4 h-4" />
                       </button>
-                      <button className="w-8 h-8 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg flex items-center justify-center transition-all" onClick={() => handleReject(p)} title="Rechazar">
+                      <button disabled={processing === p.id} className="w-8 h-8 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg flex items-center justify-center transition-all disabled:opacity-50" onClick={() => handleReview(p, 'rejected')} title="Rechazar">
                         <X className="w-4 h-4" />
                       </button>
                     </>
@@ -123,13 +120,13 @@ export function AdminPayments({ payments, onRefresh, profile }) {
                   {p.status === 'approved' && (
                     <button
                       className="w-8 h-8 bg-brand-500/10 hover:bg-brand-500/20 text-brand-400 rounded-lg flex items-center justify-center transition-all"
-                      onClick={() => generateReceiptImage(p, p.member, import.meta.env.VITE_GYM_NAME || 'GYM')}
+                      onClick={() => generateReceiptImage(p, p.member, gym?.name || import.meta.env.VITE_GYM_NAME || 'GYM')}
                       title="Descargar recibo"
                     >
                       <Download className="w-4 h-4" />
                     </button>
                   )}
-                  <button className="btn-ghost p-1.5" onClick={() => sendPaymentReminder(p, p.member)} title="Recordatorio WhatsApp">
+                  <button className="btn-ghost p-1.5" onClick={() => sendPaymentReminder(p, p.member, gym)} title="Recordatorio WhatsApp">
                     <MessageCircle className="w-4 h-4" />
                   </button>
                 </div>
@@ -146,12 +143,16 @@ export function AdminPayments({ payments, onRefresh, profile }) {
         )}
       </div>
 
-      <CreatePaymentModal open={showCreateForm} onClose={() => { setShowCreateForm(false); onRefresh() }} />
+      <CreatePaymentModal
+        open={showCreateForm}
+        payments={payments}
+        onClose={() => { setShowCreateForm(false); onRefresh() }}
+      />
     </div>
   )
 }
 
-function CreatePaymentModal({ open, onClose }) {
+function CreatePaymentModal({ open, onClose, payments }) {
   const [members, setMembers] = useState([])
   const [form, setForm] = useState({ member_id: '', amount: '', payment_method: 'cash', payment_date: today(), due_date: addDays(today(), 30), notes: '' })
   const [loading, setLoading] = useState(false)
@@ -159,7 +160,10 @@ function CreatePaymentModal({ open, onClose }) {
 
   useEffect(() => {
     if (open) {
-      getMembers().then(r => setMembers(r.data || []))
+      getMembers().then(r => {
+        setMembers(r.data || [])
+        if (r.error) toast.error(r.error.message || 'No se pudieron cargar los miembros')
+      })
       setSuccess(false)
       setForm({ member_id: '', amount: '', payment_method: 'cash', payment_date: today(), due_date: addDays(today(), 30), notes: '' })
     }
@@ -169,16 +173,27 @@ function CreatePaymentModal({ open, onClose }) {
     const m = members.find(x => x.id === memberId)
     const days = m?.plan?.duration_days || 30
     const price = m?.plan?.price || ''
-    setForm(f => ({ ...f, member_id: memberId, amount: price, due_date: addDays(today(), days) }))
+    const lastDue = getLastRegisteredDueDate(memberId, payments)
+    const anchor = lastDue || m?.start_date || today()
+    setForm(f => ({ ...f, member_id: memberId, amount: price, due_date: addDays(anchor, days) }))
   }
 
   const handleCreate = async () => {
-    if (!form.member_id || !form.amount) return
+    if (!form.member_id || !form.amount || Number(form.amount) <= 0) {
+      toast.info('Selecciona un miembro y escribe un monto válido')
+      return
+    }
     setLoading(true)
-    await createPayment({ ...form, status: 'approved' })
-    setLoading(false)
-    setSuccess(true)
-    setTimeout(() => { setSuccess(false); onClose() }, 1500)
+    try {
+      const { error } = await registerAdminPayment(form)
+      if (error) throw error
+      setSuccess(true)
+      setTimeout(() => { setSuccess(false); onClose() }, 1200)
+    } catch (error) {
+      toast.error(error.message || 'No se pudo registrar el pago')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -197,7 +212,7 @@ function CreatePaymentModal({ open, onClose }) {
             {members.map(m => <option key={m.id} value={m.id}>{m.profile?.full_name}{m.plan ? `  — ${m.plan.name}` : ''}</option>)}
           </select>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label">Monto (Q) *</label>
             <input type="number" step="0.01" className="input" placeholder="0.00" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} />
@@ -211,14 +226,15 @@ function CreatePaymentModal({ open, onClose }) {
             </select>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="label">Fecha de pago</label>
             <input type="date" className="input" value={form.payment_date} onChange={e => setForm({ ...form, payment_date: e.target.value })} />
           </div>
           <div>
-            <label className="label">Fecha vencimiento</label>
-            <input type="date" className="input" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} />
+            <label className="label">Próximo vencimiento</label>
+            <input type="date" className="input opacity-75" value={form.due_date} readOnly />
+            <p className="text-[10px] text-gray-600 mt-1">Se calcula según el último ciclo y el plan.</p>
           </div>
         </div>
         <div>

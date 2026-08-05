@@ -171,9 +171,15 @@ export const getMemberByProfile = async (profileId) => {
 }
 
 export const updateMember = async (id, updates) => {
+  const safeUpdates = { ...updates }
+  // Una columna UUID no acepta la cadena vacía. En los formularios, "Sin plan"
+  // usa value="", así que se convierte explícitamente a NULL antes de guardar.
+  if (Object.prototype.hasOwnProperty.call(safeUpdates, 'plan_id')) {
+    safeUpdates.plan_id = safeUpdates.plan_id || null
+  }
   const { data, error } = await supabase
     .from('members')
-    .update(updates)
+    .update(safeUpdates)
     .eq('id', id)
     .select()
     .single()
@@ -227,22 +233,26 @@ export const getPayments = async (memberId = null) => {
   }
 }
 
-export const createPayment = async (payment) => {
-  const { data, error } = await supabase
-    .from('payments')
-    .insert(payment)
-    .select()
-    .single()
+// Aprobar/rechazar en el servidor evita estados parciales: Supabase actualiza
+// aprobador, fecha y notificación al miembro dentro de una sola transacción.
+export const reviewPayment = async (paymentId, status) => {
+  const { data, error } = await supabase.rpc('review_payment', {
+    p_payment_id: paymentId,
+    p_status: status,
+  })
   return { data, error }
 }
 
-export const updatePayment = async (id, updates) => {
-  const { data, error } = await supabase
-    .from('payments')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
+// El vencimiento del siguiente ciclo se calcula en Supabase. Así un admin no
+// puede crear por accidente una cuota duplicada o saltarse un ciclo.
+export const registerAdminPayment = async ({ member_id, amount, payment_method, payment_date, notes }) => {
+  const { data, error } = await supabase.rpc('register_admin_payment', {
+    p_member_id: member_id,
+    p_amount: Number(amount),
+    p_payment_method: payment_method,
+    p_payment_date: payment_date || null,
+    p_notes: notes?.trim() || null,
+  })
   return { data, error }
 }
 
@@ -360,7 +370,10 @@ export const getAttendance = async (memberId) => {
 export const markAttendance = async (memberId, date) => {
   const { data, error } = await supabase
     .from('attendance')
-    .upsert({ member_id: memberId, attended_date: date })
+    .upsert(
+      { member_id: memberId, attended_date: date },
+      { onConflict: 'member_id,attended_date' }
+    )
     .select()
     .single()
   return { data, error }
@@ -415,10 +428,10 @@ export const getPlans = async () => {
   return { data, error }
 }
 
-export const createPlan = async (plan) => {
+export const createPlan = async (plan, gymId) => {
   const { data, error } = await supabase
     .from('plans')
-    .insert(plan)
+    .insert({ ...plan, gym_id: gymId })
     .select()
     .single()
   return { data, error }
@@ -435,11 +448,8 @@ export const updatePlan = async (id, updates) => {
 }
 
 export const deletePlan = async (id) => {
-  const { error } = await supabase
-    .from('plans')
-    .update({ is_active: false })
-    .eq('id', id)
-  return { error }
+  const { data, error } = await supabase.rpc('archive_plan', { p_plan_id: id })
+  return { data, error }
 }
 // ── ANUNCIOS ───────────────────────────────────────────────
 export const getAnnouncements = async () => {
@@ -453,10 +463,19 @@ export const getAnnouncements = async () => {
   return { data, error }
 }
 
-export const createAnnouncement = async (ann) => {
+export const getAdminAnnouncements = async () => {
   const { data, error } = await supabase
     .from('announcements')
-    .insert(ann)
+    .select('*')
+    .order('pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+  return { data, error }
+}
+
+export const createAnnouncement = async (ann, gymId) => {
+  const { data, error } = await supabase
+    .from('announcements')
+    .insert({ ...ann, gym_id: gymId })
     .select()
     .single()
   return { data, error }

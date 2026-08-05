@@ -11,7 +11,7 @@ import { playNotifSound, playAchievementSound } from '../App'
 import {
   supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
-  createPayment, updatePayment, createMeasurement,
+  createMeasurement,
   updateMember, getPlans, createPlan, updatePlan,
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
@@ -24,13 +24,14 @@ import {
   displayValue, getMeasurementComment, daysBetween,
   generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
   generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage,
-  toLocalDateStr,
+  toLocalDateStr, getLastRegisteredDueDate, buildPaymentCycleDates,
+  selectConsecutiveCycleDates,
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner, toast, EmptyState } from './shared'
 
 // ── USER PAYMENTS ──────────────────────────────────────────
-export function UserPayments({ payments, member, onRefresh }) {
+export function UserPayments({ payments, member, gym, onRefresh }) {
   const [showNewPayment, setShowNewPayment] = useState(false)
   const [uploading, setUploading] = useState(null)
 
@@ -50,12 +51,6 @@ export function UserPayments({ payments, member, onRefresh }) {
       setUploading(null)
       return
     }
-    await createNotification({
-      profile_id: member.profile_id,
-      type: 'custom',
-      title: 'Comprobante enviado al administrador',
-      message: 'Tu comprobante fue enviado. El administrador lo revisará pronto.',
-    })
     setUploading(null)
     toast.success('Comprobante enviado. El administrador lo revisará pronto.')
     onRefresh()
@@ -63,12 +58,18 @@ export function UserPayments({ payments, member, onRefresh }) {
 
   return (
     <div className="space-y-4 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col min-[380px]:flex-row min-[380px]:items-center justify-between gap-3">
         <h2 className="section-title">Mis pagos</h2>
-        <button className="btn-primary text-sm" onClick={() => setShowNewPayment(true)}>
+        <button className="btn-primary text-sm" disabled={!member?.plan} onClick={() => setShowNewPayment(true)}>
           <Plus className="w-4 h-4" /> Registrar pago
         </button>
       </div>
+
+      {!member?.plan && (
+        <div className="card border-yellow-500/20 bg-yellow-500/5 text-sm text-yellow-300">
+          Aún no tienes un plan asignado. Contacta a recepción antes de registrar un pago.
+        </div>
+      )}
 
       <div className="space-y-3">
         {payments.map(p => {
@@ -104,7 +105,7 @@ export function UserPayments({ payments, member, onRefresh }) {
                     target="_blank"
                     rel="noreferrer"
                     download
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    className="absolute top-2 right-2 bg-black/70 hover:bg-black/80 text-white rounded-lg px-2 py-1 text-xs flex items-center gap-1 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
                   >
                     <Download className="w-3 h-3" /> Ver/Descargar
                   </a>
@@ -143,7 +144,7 @@ export function UserPayments({ payments, member, onRefresh }) {
                 )}
                 {/* Enviar por WhatsApp al admin */}
                 {(p.voucher_url || p.payment_method === 'cash') && p.status !== 'approved' && (
-                  <button className="btn-ghost text-sm" onClick={() => sendVoucherToAdmin(p, member)}>
+                  <button className="btn-ghost text-sm" onClick={() => sendVoucherToAdmin(p, member, gym)}>
                     <MessageCircle className="w-3.5 h-3.5" /> Enviar al admin
                   </button>
                 )}
@@ -175,6 +176,7 @@ export function UserPayments({ payments, member, onRefresh }) {
         open={showNewPayment}
         onClose={() => setShowNewPayment(false)}
         member={member}
+        gym={gym}
         existingPayments={payments}
         onRefresh={onRefresh}
       />
@@ -183,7 +185,7 @@ export function UserPayments({ payments, member, onRefresh }) {
 }
 
 // ── MODAL NUEVO PAGO (usuario) ─────────────────────────────
-function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh }) {
+function NewPaymentModal({ open, onClose, member, gym, existingPayments, onRefresh }) {
   const [method, setMethod]       = useState('transfer')
   const [file, setFile]           = useState(null)
   const [preview, setPreview]     = useState(null)
@@ -197,14 +199,9 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
   // Los cobros siguen la duracion real del plan, no el fin del mes calendario.
   // Para datos antiguos se continua desde el ultimo vencimiento registrado.
   const durationDays = Math.max(1, Number(member?.plan?.duration_days || 30))
-  const lastRegisteredDue = existingPayments
-    .filter(p => p.status !== 'rejected' && p.due_date)
-    .map(p => p.due_date)
-    .sort()
-    .at(-1)
+  const lastRegisteredDue = getLastRegisteredDueDate(member?.id, existingPayments)
   const cycleAnchor = lastRegisteredDue || member?.start_date || today()
-  const cycles = Array.from({ length: 12 }, (_, index) => {
-    const due = addDays(cycleAnchor, durationDays * (index + 1))
+  const cycles = buildPaymentCycleDates(cycleAnchor, durationDays, 12).map(due => {
     const begins = addDays(due, -durationDays + 1)
     return {
       key: due,
@@ -215,9 +212,9 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
   })
 
   const toggleCycle = (key) => {
-    setSelectedCycles(prev =>
-      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
-    )
+    setSelectedCycles(prev => selectConsecutiveCycleDates(
+      cycles.map(cycle => cycle.key), key, prev
+    ))
   }
 
   const totalAmount = selectedCycles.length * planPrice
@@ -278,9 +275,9 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
           <p className="text-gray-400 text-sm mt-1 mb-5">
             El administrador revisará tu comprobante y aprobará el pago.
           </p>
-          <button className="btn-primary w-full" onClick={() => {
+          {gym?.whatsapp_number && <button className="btn-primary w-full" onClick={() => {
             // Enviar WhatsApp al admin automáticamente
-            const msg = `🏋️ *${import.meta.env.VITE_GYM_NAME || 'GymApp'}*
+            const msg = `🏋️ *${gym?.name || import.meta.env.VITE_GYM_NAME || 'GymApp'}*
 📋 *Nuevo pago registrado*
 
 👤 *${member?.profile?.full_name}*
@@ -288,14 +285,15 @@ function NewPaymentModal({ open, onClose, member, existingPayments, onRefresh })
 📅 Ciclos: ${selectedCycles.map(k => cycles.find(c => c.key === k)?.label).join(', ')}
 
 Por favor revisar y aprobar ✅`
-            const num = (import.meta.env.VITE_GYM_WHATSAPP || '').replace(/[^0-9]/g,'')
+            const digits = String(gym.whatsapp_number).replace(/[^0-9]/g,'')
+            const num = digits.length === 8 ? `502${digits}` : digits
             window.open(`https://wa.me/${num}?text=${encodeURIComponent(msg)}`, '_blank')
             handleClose()
           }}>
             <MessageCircle className="w-4 h-4" /> Notificar al administrador por WhatsApp
-          </button>
+          </button>}
           <button className="btn-ghost w-full mt-2" onClick={handleClose}>
-            Cerrar sin notificar
+            Cerrar
           </button>
         </div>
       ) : (
@@ -313,7 +311,7 @@ Por favor revisar y aprobar ✅`
           </div>
 
           {/* Proximos 12 ciclos del plan */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-1 min-[390px]:grid-cols-2 gap-2">
             {cycles.map(cycle => {
               const isSelected = selectedCycles.includes(cycle.key)
               return (

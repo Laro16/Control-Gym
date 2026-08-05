@@ -32,6 +32,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [showNotifs, setShowNotifs] = useState(false)
   const [showProfile, setShowProfile] = useState(false)
   const [gymLogo, setGymLogo]         = useState(null)
+  const [gym, setGym]                 = useState(null)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarPreview, setAvatarPreview]     = useState(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
@@ -50,15 +51,20 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     setNotifications(n.data || [])
     setLoading(false)
 
+    const firstError = m.error || p.error || pl.error || n.error
+    if (firstError) toast.error(firstError.message || 'No se pudieron cargar todos los datos')
+
     // Las notificaciones automáticas (cuota vencida / por vencer) ahora
     // las genera Supabase cada mañana con pg_cron — ver fase-final.sql.
 
     // Cargar logo del gimnasio (el propio del admin)
-    const { data: gymData } = await supabase
-      .from('gyms').select('logo_url, primary_color').eq('id', profile.gym_id).single()
-    if (gymData?.logo_url) setGymLogo(gymData.logo_url)
+    const { data: gymData, error: gymError } = await supabase
+      .from('gyms').select('name, logo_url, whatsapp_number, primary_color').eq('id', profile.gym_id).single()
+    setGym(gymData || null)
+    setGymLogo(gymData?.logo_url || null)
     applyGymTheme(gymData?.primary_color)
-  }, [profile.id])
+    if (gymError) toast.error(gymError.message || 'No se pudo cargar la configuración del gimnasio')
+  }, [profile.id, profile.gym_id])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -99,7 +105,8 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
         )
         const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
         const finalUrl = `${urlData.publicUrl}?v=${Date.now()}`
-        await supabase.from('profiles').update({ avatar_url: finalUrl }).eq('id', profile.id)
+        const { error: profileError } = await supabase.from('profiles').update({ avatar_url: finalUrl }).eq('id', profile.id)
+        if (profileError) throw profileError
         profile.avatar_url = finalUrl
         toast.success('Foto de perfil actualizada')
         loadData()
@@ -117,30 +124,48 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     const validationError = validateImageFile(file)
     if (validationError) { toast.error(validationError); return }
     setUploadingLogo(true)
-    const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
-    // Ruta por gimnasio: evita que un gimnasio sobrescriba el logo de otro
-    const path = `${profile.gym_id}/logo.${ext}`
-    const { error } = await supabase.storage.from('logos').upload(path, file, {
-      upsert: true, cacheControl: '1', contentType: file.type
-    })
-    if (!error) {
+    try {
+      const ext = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg'
+      // Ruta por gimnasio: evita que un gimnasio sobrescriba el logo de otro
+      const path = `${profile.gym_id}/logo.${ext}`
+      const { error } = await supabase.storage.from('logos').upload(path, file, {
+        upsert: true, cacheControl: '1', contentType: file.type
+      })
+      if (error) throw error
+
       await supabase.storage.from('logos').remove(
         [`${profile.gym_id}/logo.jpg`, `${profile.gym_id}/logo.png`, `${profile.gym_id}/logo.webp`]
           .filter(candidate => candidate !== path)
       )
       const { data: urlData } = supabase.storage.from('logos').getPublicUrl(path)
       const url = `${urlData.publicUrl}?v=${Date.now()}`
-      await supabase.from('gyms').update({ logo_url: url }).eq('id', profile.gym_id)
+      const { error: updateError } = await supabase.from('gyms').update({ logo_url: url }).eq('id', profile.gym_id)
+      if (updateError) throw updateError
       setGymLogo(url)
+      toast.success('Logo del gimnasio actualizado')
+    } catch (error) {
+      toast.error(error.message || 'No se pudo actualizar el logo')
+    } finally {
+      setUploadingLogo(false)
     }
-    setUploadingLogo(false)
   }
 
-  const handleBell = () => {
+  const markNotificationsRead = async () => {
+    if (unread === 0) return true
+    const { error } = await markAllNotificationsRead(profile.id)
+    if (error) {
+      toast.error(error.message || 'No se pudieron marcar las notificaciones')
+      return false
+    }
+    setNotifications(current => current.map(notification => ({ ...notification, is_read: true })))
+    return true
+  }
+
+  const handleBell = async () => {
     setShowNotifs(p => !p)
     setShowProfile(false)
     if (!showNotifs && unread > 0) {
-      markAllNotificationsRead(profile.id)
+      await markNotificationsRead()
       playNotifSound()
     }
   }
@@ -213,13 +238,13 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
         {/* Dropdown notificaciones */}
         {showNotifs && (
           <div
-            className="absolute right-4 top-14 w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-96 overflow-y-auto"
+            className="fixed left-2 right-2 top-[4.25rem] sm:absolute sm:left-auto sm:right-4 sm:top-14 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
               <h4 className="font-semibold text-sm text-gray-300">Notificaciones</h4>
               <button
-                onClick={() => { markAllNotificationsRead(profile.id); setShowNotifs(false); loadData() }}
+                onClick={async () => { await markNotificationsRead(); setShowNotifs(false) }}
                 className="text-xs text-gray-500 hover:text-white"
               >
                 Marcar leídas
@@ -241,7 +266,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
         {/* Dropdown perfil admin */}
         {showProfile && (
           <div
-            className="absolute right-4 top-14 w-64 card border border-gray-700 shadow-2xl z-50 animate-slide-up"
+            className="fixed left-2 right-2 top-[4.25rem] sm:absolute sm:left-auto sm:right-4 sm:top-14 sm:w-72 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
@@ -329,11 +354,11 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
               />
             )}
             {tab === 'members'  && <AdminMembers  members={members} plans={plans} onRefresh={loadData} gymId={profile.gym_id} />}
-            {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} profile={profile} />}
-            {tab === 'plans'    && <AdminPlans    plans={plans} onRefresh={loadData} />}
+            {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} gym={gym} />}
+            {tab === 'plans'    && <AdminPlans plans={plans} members={members} gymId={profile.gym_id} onRefresh={loadData} />}
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
             {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
-            {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} />}
+            {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} gymId={profile.gym_id} onRefresh={loadData} />}
             {tab === 'checkin'       && (
               <div className="space-y-8">
                 <CheckInQR profile={profile} />

@@ -2,7 +2,7 @@ import { Check, ClipboardList } from 'lucide-react'
 import {
   supabase, adminCreateUser,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
-  createPayment, updatePayment, createMeasurement,
+  createMeasurement,
   updateMember, getPlans, createPlan, updatePlan,
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,

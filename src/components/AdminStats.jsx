@@ -152,7 +152,7 @@ export function AdminStats({ members, payments }) {
 
   // ── Distribución de estados de cuota ──
   const statusDistribution = useMemo(() => {
-    let current = 0, overdue = 0, dueSoon = 0, newM = 0, pending = 0
+    let current = 0, overdue = 0, dueSoon = 0, newM = 0, pending = 0, noPlan = 0, noPayment = 0
     members.forEach(m => {
       const st = getMemberPaymentStatus(m, payments)
       if (st === 'current') current++
@@ -160,6 +160,8 @@ export function AdminStats({ members, payments }) {
       else if (st === 'due_soon') dueSoon++
       else if (st === 'new_member') newM++
       else if (st === 'pending_approval') pending++
+      else if (st === 'no_plan') noPlan++
+      else if (st === 'no_payment') noPayment++
     })
     return [
       { label: 'Al día',           value: current,  color: '#10b981' },
@@ -167,6 +169,8 @@ export function AdminStats({ members, payments }) {
       { label: 'Próximos a vencer',value: dueSoon,  color: '#eab308' },
       { label: 'Primer mes',       value: newM,     color: '#94a3b8' },
       { label: 'Pendientes',       value: pending,  color: '#f59e0b' },
+      { label: 'Sin plan',         value: noPlan,   color: '#64748b' },
+      { label: 'Sin pago',         value: noPayment,color: '#f97316' },
     ].filter(s => s.value > 0)
   }, [members, payments])
 

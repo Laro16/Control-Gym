@@ -57,6 +57,31 @@ export const daysBetween = (a, b) => {
   return Math.round((parseDateStr(b) - parseDateStr(a)) / msPerDay)
 }
 
+export const getLastRegisteredDueDate = (memberId, payments = []) => (
+  payments
+    .filter(payment => payment.member_id === memberId && payment.status !== 'rejected' && payment.due_date)
+    .map(payment => payment.due_date)
+    .sort()
+    .at(-1) || null
+)
+
+export const buildPaymentCycleDates = (anchor, durationDays, count = 12) => {
+  const duration = Math.max(1, Number(durationDays || 30))
+  return Array.from({ length: Math.max(0, count) }, (_, index) =>
+    addDays(anchor, duration * (index + 1))
+  )
+}
+
+// Los ciclos se pagan desde el primero pendiente hasta el seleccionado. No se
+// permiten huecos (por ejemplo, pagar el tercero dejando primero y segundo).
+export const selectConsecutiveCycleDates = (cycleDates, selectedDate, currentSelection = []) => {
+  const index = cycleDates.indexOf(selectedDate)
+  if (index < 0) return currentSelection
+  return currentSelection.length === index + 1
+    ? cycleDates.slice(0, index)
+    : cycleDates.slice(0, index + 1)
+}
+
 // ── ESTADO DE PAGO ─────────────────────────────────────────
 // Calcula el estado de una cuota según su due_date
 export const getPaymentStatus = (dueDate) => {
@@ -76,9 +101,10 @@ export const getPaymentStatus = (dueDate) => {
 //   - 26-6 al 1-7  → 'due_soon'    (5 días o menos para vencer)
 //   - 2-7 en adelante → 'overdue'  (vencida)
 export const getMemberPaymentStatus = (member, payments) => {
-  const memberPayments = (payments || []).filter(
-    p => p.member_id === member.id && p.status !== 'rejected'
-  )
+  if (!member?.plan_id && !member?.plan) return 'no_plan'
+  const memberPayments = (payments || [])
+    .filter(p => p.member_id === member.id && p.status !== 'rejected')
+    .sort((a, b) => String(b.due_date || '').localeCompare(String(a.due_date || '')))
 
   if (!memberPayments.length) {
     if (!member.start_date) return 'no_payment'
@@ -107,6 +133,7 @@ export const paymentStatusLabel = {
   no_payment:       { text: 'Sin pago',             cls: 'badge-red',    dot: 'bg-red-400',     bg: 'bg-red-500/10'    },
   new_member:       { text: 'Primer mes',           cls: 'badge-gray',   dot: 'bg-gray-400',    bg: 'bg-gray-700/30'   },
   pending_approval: { text: 'Pendiente aprobación', cls: 'badge-yellow', dot: 'bg-yellow-400',  bg: 'bg-yellow-500/10' },
+  no_plan:          { text: 'Sin plan',             cls: 'badge-gray',   dot: 'bg-gray-400',    bg: 'bg-gray-700/30'   },
 }
 
 export const approvalStatusLabel = {

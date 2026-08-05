@@ -11,7 +11,7 @@ import {
   markAllNotificationsRead, getPlans
 } from '../supabase'
 import { formatDate, today } from '../utils/helpers'
-import { PageSkeleton, PullToRefresh } from './shared'
+import { PageSkeleton, PullToRefresh, toast } from './shared'
 import { applyGymTheme } from '../utils/theme'
 import { UserHome } from './UserHome'
 import { UserPayments } from './UserPayments'
@@ -32,6 +32,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   const [loading, setLoading] = useState(true)
   const [showNotifs, setShowNotifs] = useState(false)
   const [gymLogo, setGymLogo]         = useState(null)
+  const [gym, setGym]                 = useState(null)
   const [streakOptions, setStreakOptions] = useState({ closedWeekdays: [0, 6], holidays: [] })
   const [showAccount, setShowAccount] = useState(false)
   const prevNotifsCount = useRef(0)
@@ -47,6 +48,8 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     setMember(m)
     setPlans(pl.data || [])
     setNotifications(notifs.data || [])
+    const firstError = mem.error || pl.error || notifs.error
+    if (firstError) toast.error(firstError.message || 'No se pudieron cargar todos tus datos')
 
     if (m?.id) {
       const [pay, meas, ph, att] = await Promise.all([
@@ -59,19 +62,28 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       setMeasurements(meas.data || [])
       setPhotos(ph.data || [])
       setAttendance(att.data || [])
+      const detailError = pay.error || meas.error || ph.error || att.error
+      if (detailError) toast.error(detailError.message || 'Parte de tu información no pudo cargarse')
+    } else {
+      setPayments([])
+      setMeasurements([])
+      setPhotos([])
+      setAttendance([])
     }
     setLoading(false)
 
     // Datos del gimnasio del miembro: logo + config de racha
-    const { data: gymData } = await supabase
-      .from('gyms').select('logo_url, closed_weekdays, holidays, primary_color').eq('id', profile.gym_id).single()
-    if (gymData?.logo_url) setGymLogo(gymData.logo_url)
+    const { data: gymData, error: gymError } = await supabase
+      .from('gyms').select('name, logo_url, whatsapp_number, closed_weekdays, holidays, primary_color').eq('id', profile.gym_id).single()
+    setGym(gymData || null)
+    setGymLogo(gymData?.logo_url || null)
     applyGymTheme(gymData?.primary_color)
+    if (gymError) toast.error(gymError.message || 'No se pudo cargar la configuración del gimnasio')
     if (gymData) setStreakOptions({
       closedWeekdays: gymData.closed_weekdays || [0, 6],
       holidays: Array.isArray(gymData.holidays) ? gymData.holidays : [],
     })
-  }, [profile.id])
+  }, [profile.id, profile.gym_id])
 
   useEffect(() => { loadData() }, [loadData])
 
@@ -86,6 +98,19 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
     setTab(id)
     window.scrollTo({ top: 0 })
     if (navigator.vibrate) navigator.vibrate(8) // feedback táctil sutil en Android
+  }
+
+  const toggleNotifications = async () => {
+    const opening = !showNotifs
+    setShowNotifs(opening)
+    setShowAccount(false)
+    if (!opening || unread === 0) return
+    const { error } = await markAllNotificationsRead(profile.id)
+    if (error) {
+      toast.error(error.message || 'No se pudieron marcar las notificaciones')
+      return
+    }
+    setNotifications(current => current.map(notification => ({ ...notification, is_read: true })))
   }
 
   const tabs = [
@@ -136,11 +161,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
               {darkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
             </button>
             {/* Notificaciones */}
-            <button className="relative btn-ghost p-2" onClick={() => {
-              setShowNotifs(!showNotifs)
-              setShowAccount(false)
-              if (!showNotifs) markAllNotificationsRead(profile.id)
-            }}>
+            <button className="relative btn-ghost p-2" onClick={toggleNotifications}>
               <Bell className="w-5 h-5" />
               {unread > 0 && <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-brand-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">{unread > 9 ? '9+' : unread}</span>}
             </button>
@@ -156,7 +177,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
           </div>
         </div>
         {showNotifs && (
-          <div className="absolute right-4 top-14 w-72 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-80 overflow-y-auto">
+          <div className="fixed left-2 right-2 top-[4.25rem] sm:absolute sm:left-auto sm:right-4 sm:top-14 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto">
             <p className="text-xs font-semibold text-gray-500 mb-2">Notificaciones</p>
             {notifications.length === 0 ? <p className="text-gray-500 text-sm">Sin notificaciones</p> :
               notifications.slice(0, 15).map(n => (
@@ -200,7 +221,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
         {loading ? <PageSkeleton /> : (
           <>
             {tab === 'home'     && <UserHome member={member} payments={payments} profile={profile} attendance={attendance} streakOptions={streakOptions} onNavigate={switchTab} />}
-            {tab === 'payments' && <UserPayments payments={payments} member={member} onRefresh={loadData} />}
+            {tab === 'payments' && <UserPayments payments={payments} member={member} gym={gym} onRefresh={loadData} />}
             {tab === 'body'     && <UserBody measurements={measurements} photos={photos} member={member} onRefresh={loadData} />}
             {tab === 'streak'   && <UserStreak attendance={attendance} member={member} payments={payments} onRefresh={loadData} profile={profile} streakOptions={streakOptions} />}
             {tab === 'plans'    && <UserPlans plans={plans} currentPlanId={member?.plan_id} />}

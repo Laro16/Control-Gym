@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
-import { CalendarDays, Plus, Trash2, Check, Save, Palette } from 'lucide-react'
+import { CalendarDays, Plus, Trash2, Check, Save, Palette, CreditCard } from 'lucide-react'
 import { getMyGym, updateGym } from '../supabase'
 import { applyGymTheme } from '../utils/theme'
-import { Spinner, EmptyState } from './shared'
+import { Spinner, EmptyState, toast } from './shared'
 import { formatDate } from '../utils/helpers'
 
 const WEEKDAYS = [
@@ -20,14 +20,17 @@ export function GymSchedule({ profile }) {
   const [newDate, setNewDate]   = useState('')
   const [newLabel, setNewLabel] = useState('')
   const [color, setColor]       = useState('#f97316')
+  const [allowOverdueCheckin, setAllowOverdueCheckin] = useState(true)
 
   const load = useCallback(async () => {
     setLoading(true)
-    const { data } = await getMyGym(profile.gym_id)
+    const { data, error } = await getMyGym(profile.gym_id)
     setClosed(data?.closed_weekdays || [])
     setHolidays(Array.isArray(data?.holidays) ? data.holidays : [])
     setColor(data?.primary_color || '#f97316')
+    setAllowOverdueCheckin(data?.allow_overdue_checkin ?? true)
     setLoading(false)
+    if (error) toast.error(error.message || 'No se pudo cargar la configuración')
   }, [profile.gym_id])
 
   useEffect(() => { load() }, [load])
@@ -69,9 +72,16 @@ export function GymSchedule({ profile }) {
       closed_weekdays: closed,
       holidays,
       primary_color: color,
+      allow_overdue_checkin: allowOverdueCheckin,
     })
     setSaving(false)
-    if (!error) { setSaved(true); setTimeout(() => setSaved(false), 2500) }
+    if (error) {
+      toast.error(error.message || 'No se pudieron guardar los cambios')
+      return
+    }
+    setSaved(true)
+    toast.success('Configuración guardada')
+    setTimeout(() => setSaved(false), 2500)
   }
 
   if (loading) return <Spinner />
@@ -138,6 +148,33 @@ export function GymSchedule({ profile }) {
           })}
         </div>
         <p className="text-xs text-gray-600">Marca los días en que normalmente no abres.</p>
+      </div>
+
+      <div className="card">
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-3 min-w-0">
+            <span className="w-10 h-10 rounded-xl bg-brand-500/10 flex items-center justify-center flex-shrink-0">
+              <CreditCard className="w-5 h-5 text-brand-400" />
+            </span>
+            <div>
+              <p className="font-semibold text-white text-sm">Check-in con cuota vencida</p>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">
+                {allowOverdueCheckin
+                  ? 'Se permite entrar y se muestra una advertencia de pago.'
+                  : 'Supabase bloqueará el check-in hasta que la cuota quede al día.'}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={allowOverdueCheckin}
+            onClick={() => { setSaved(false); setAllowOverdueCheckin(value => !value) }}
+            className={`relative w-12 h-7 rounded-full flex-shrink-0 transition-colors ${allowOverdueCheckin ? 'bg-brand-500' : 'bg-gray-700'}`}
+          >
+            <span className={`absolute top-1 w-5 h-5 bg-white rounded-full shadow transition-transform ${allowOverdueCheckin ? 'translate-x-6' : 'translate-x-1'}`} />
+          </button>
+        </div>
       </div>
 
       <div className="card space-y-3">

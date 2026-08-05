@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Plus, Edit2, Trash2, Pin, Eye, EyeOff, Check, X } from 'lucide-react'
 import {
-  supabase,
-  getAnnouncements, createAnnouncement,
+  getAdminAnnouncements, createAnnouncement,
   updateAnnouncement, deleteAnnouncement
 } from '../supabase'
 import { formatDate, today } from '../utils/helpers'
-import { Modal } from './shared'
+import { Modal, toast } from './shared'
 
 const EMOJIS = ['📢','🏋️','💪','🔥','⚡','🏆','🎉','⚠️','✅','🆕','📅','🎯']
 
@@ -23,12 +22,19 @@ function AnnouncementForm({ initial, onSave, onClose }) {
   const handleSave = async () => {
     if (!form.title.trim() || !form.body.trim()) return
     setSaving(true)
-    await onSave({
-      ...form,
-      expires_at: form.expires_at || null,
-    })
-    setSaving(false)
-    onClose()
+    try {
+      await onSave({
+        ...form,
+        title: form.title.trim(),
+        body: form.body.trim(),
+        expires_at: form.expires_at || null,
+      })
+      onClose()
+    } catch (error) {
+      toast.error(error.message || 'No se pudo guardar el anuncio')
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (
@@ -71,7 +77,7 @@ function AnnouncementForm({ initial, onSave, onClose }) {
         />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">Expira el (opcional)</label>
           <input
@@ -118,7 +124,7 @@ function AnnouncementForm({ initial, onSave, onClose }) {
   )
 }
 
-export function AdminAnnouncements({ profileId, onRefresh }) {
+export function AdminAnnouncements({ profileId, gymId, onRefresh }) {
   const [announcements, setAnnouncements] = useState([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -128,42 +134,47 @@ export function AdminAnnouncements({ profileId, onRefresh }) {
   // Admin ve TODOS los anuncios (incluso ocultos y expirados)
   const load = async () => {
     setLoading(true)
-    const { data } = await supabase
-      .from('announcements')
-      .select('*')
-      .order('pinned', { ascending: false })
-      .order('created_at', { ascending: false })
+    const { data, error } = await getAdminAnnouncements()
     setAnnouncements(data || [])
     setLoading(false)
+    if (error) toast.error(error.message || 'No se pudieron cargar los anuncios')
   }
 
   useEffect(() => { load() }, [])
 
   const handleCreate = async (form) => {
-    await createAnnouncement({ ...form, created_by: profileId })
-    load()
-    if (onRefresh) onRefresh()
+    const { error } = await createAnnouncement({ ...form, created_by: profileId }, gymId)
+    if (error) throw error
+    toast.success('Anuncio publicado')
+    await load()
+    if (onRefresh) await onRefresh()
   }
 
   const handleUpdate = async (form) => {
-    await updateAnnouncement(editing.id, form)
-    load()
+    const { error } = await updateAnnouncement(editing.id, form)
+    if (error) throw error
+    toast.success('Anuncio actualizado')
+    await load()
   }
 
   const handleToggleVisible = async (ann) => {
-    await updateAnnouncement(ann.id, { visible: !ann.visible })
-    load()
+    const { error } = await updateAnnouncement(ann.id, { visible: !ann.visible })
+    if (error) { toast.error(error.message || 'No se pudo cambiar la visibilidad'); return }
+    await load()
   }
 
   const handleTogglePin = async (ann) => {
-    await updateAnnouncement(ann.id, { pinned: !ann.pinned })
-    load()
+    const { error } = await updateAnnouncement(ann.id, { pinned: !ann.pinned })
+    if (error) { toast.error(error.message || 'No se pudo fijar el anuncio'); return }
+    await load()
   }
 
   const handleDelete = async (id) => {
-    await deleteAnnouncement(id)
+    const { error } = await deleteAnnouncement(id)
+    if (error) { toast.error(error.message || 'No se pudo eliminar el anuncio'); return }
     setConfirmDel(null)
-    load()
+    toast.success('Anuncio eliminado')
+    await load()
   }
 
   return (
@@ -192,7 +203,7 @@ export function AdminAnnouncements({ profileId, onRefresh }) {
               key={a.id}
               className={`card transition-all ${!a.visible ? 'opacity-50' : ''} ${a.pinned ? 'border-brand-500/30' : ''}`}
             >
-              <div className="flex items-start gap-3">
+              <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                 <span className="text-2xl flex-shrink-0 mt-0.5">{a.emoji}</span>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
@@ -214,7 +225,7 @@ export function AdminAnnouncements({ profileId, onRefresh }) {
                 </div>
 
                 {/* Acciones */}
-                <div className="flex items-center gap-1 flex-shrink-0">
+                <div className="flex items-center gap-1 flex-shrink-0 self-end sm:self-auto">
                   <button
                     className="btn-ghost p-1.5"
                     title={a.pinned ? 'Desfijar' : 'Fijar arriba'}

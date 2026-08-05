@@ -27,6 +27,7 @@ export default defineConfig({
         // Nunca cachear llamadas a Supabase: datos siempre frescos
         navigateFallbackDenylist: [/^\/rest/, /^\/auth/],
         runtimeCaching: [],
+        cleanupOutdatedCaches: true,
         clientsClaim: true,
         skipWaiting: true,
       },
