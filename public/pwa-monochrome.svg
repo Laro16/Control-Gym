@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <mask id="pulse-cut">
+    <rect width="64" height="64" fill="#fff"/>
+    <path d="M21 32h6l2-6 4 13 3-8h7" stroke="#000" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"/>
+  </mask>
+  <g mask="url(#pulse-cut)" fill="#000" stroke="#000">
+    <path d="M47 16a22 22 0 1 0 0 32" fill="none" stroke-width="8"/>
+    <path d="M14 32h36" stroke-width="7"/>
+    <path d="M15 24v16M49 24v16" stroke-width="4"/>
+    <circle cx="32" cy="32" r="8" stroke="none"/>
+  </g>
+</svg>
