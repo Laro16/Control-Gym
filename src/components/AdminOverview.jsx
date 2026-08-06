@@ -38,10 +38,10 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
   const monthLabel = new Date(`${today()}T12:00:00`).toLocaleDateString('es-GT', { month: 'long' })
 
   const stats = [
-    { id: 'active', label: 'Miembros activos', value: active, icon: Users, color: 'text-brand-400', bg: 'bg-brand-500/10', clickable: true },
-    { id: 'pending', label: 'Pagos por revisar', value: pendingPayments.length, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-500/10', clickable: true },
-    { id: 'overdue', label: 'Cuotas vencidas', value: overdueMembers.length, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10', clickable: true },
-    { id: 'income', label: 'Pagos aprobados', value: approvedThisMonth, icon: CreditCard, color: 'text-emerald-400', bg: 'bg-emerald-500/10', clickable: false },
+    { id: 'active', label: 'Miembros activos', value: active, icon: Users, color: 'text-brand-400', bg: 'bg-brand-500/10', target: { tab: 'members', memberFilter: 'active' } },
+    { id: 'pending', label: 'Pagos por revisar', value: pendingPayments.length, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-500/10', target: 'payments' },
+    { id: 'overdue', label: 'Cuotas vencidas', value: overdueMembers.length, icon: AlertTriangle, color: 'text-red-400', bg: 'bg-red-500/10', target: { tab: 'members', memberFilter: 'overdue' } },
+    { id: 'income', label: 'Pagos aprobados', value: approvedThisMonth, icon: CreditCard, color: 'text-emerald-400', bg: 'bg-emerald-500/10', target: 'payments' },
   ]
 
   const quickActions = [
@@ -158,15 +158,15 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
           {stats.map(s => (
             <button
               key={s.id}
-              onClick={() => s.clickable && handleFilter(s.id)}
-              className={`admin-kpi-card text-left rounded-2xl p-4 transition-all duration-200 ${s.clickable ? 'active:scale-95 cursor-pointer' : 'cursor-default'}
-                ${filter === s.id ? 'admin-kpi-active' : ''}`}
+              onClick={() => onNavigate(s.target)}
+              className="admin-kpi-card text-left rounded-2xl p-4 transition-all duration-200 active:scale-95 cursor-pointer"
+              aria-label={`Abrir ${s.label.toLowerCase()}`}
             >
               <div className="flex items-start justify-between gap-2">
                 <div className={`w-10 h-10 rounded-2xl ${s.bg} flex items-center justify-center`}>
                   <s.icon className={`w-5 h-5 ${s.color}`} />
                 </div>
-                {s.clickable && <ChevronRight className="w-4 h-4 text-gray-600" />}
+                <ChevronRight className="w-4 h-4 text-gray-600" />
               </div>
               <div className={`text-2xl sm:text-3xl font-black mt-4 ${s.color}`}>{s.value}</div>
               <div className="text-xs text-gray-500 mt-0.5">{s.label}</div>
@@ -193,7 +193,7 @@ export function AdminOverview({ members, payments, profile, onNavigate }) {
               </button>
             )}
             {overdueMembers.length > 0 && (
-              <button onClick={() => handleFilter('overdue')} className="admin-attention-item rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
+              <button onClick={() => onNavigate({ tab: 'members', memberFilter: 'overdue' })} className="admin-attention-item rounded-2xl p-3 flex items-center gap-3 text-left active:scale-[0.99] transition-transform">
                 <span className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center"><AlertTriangle className="w-5 h-5 text-red-400" /></span>
                 <span className="flex-1"><strong className="block text-sm text-white">{overdueMembers.length} cuotas vencidas</strong><small className="text-xs text-gray-500">Ver miembros y enviar recordatorios</small></span>
                 <ChevronRight className="w-4 h-4 text-gray-600" />

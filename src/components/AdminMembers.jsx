@@ -19,26 +19,50 @@ import {
   deleteMemberPermanently
 } from '../supabase'
 import {
-  formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
+  formatDate, formatCurrency, getPaymentStatus, getMemberPaymentStatus, paymentStatusLabel,
   approvalStatusLabel, measurementFields, getMeasurementDiff,
   displayValue, getMeasurementComment, daysBetween,
-  generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
-  generateMasterExcel, today, addDays, calculateStreak
+  today, addDays, calculateStreak
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner, EmptyState, toast } from './shared'
 
 // ── ADMIN MEMBERS ──────────────────────────────────────────
-export function AdminMembers({ members, plans, onRefresh, gymId }) {
+export function AdminMembers({ members, payments, plans, onRefresh, gymId, initialFilter = 'all' }) {
   const [selected, setSelected] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [search, setSearch] = useState('')
+  const [listFilter, setListFilter] = useState(initialFilter)
 
-  const filtered = members.filter(m =>
-    m.profile?.full_name?.toLowerCase().includes(search.toLowerCase()) ||
-    m.profile?.email?.toLowerCase().includes(search.toLowerCase())
-  )
+  useEffect(() => setListFilter(initialFilter || 'all'), [initialFilter])
+
+  const matchesListFilter = member => {
+    const paymentState = getMemberPaymentStatus(member, payments)
+    if (listFilter === 'active') return member.status === 'active'
+    if (listFilter === 'overdue') return paymentState === 'overdue'
+    if (listFilter === 'due_soon') return paymentState === 'due_soon'
+    if (listFilter === 'current') return ['current', 'new_member'].includes(paymentState)
+    if (listFilter === 'pending_approval') return paymentState === 'pending_approval'
+    return true
+  }
+
+  const normalizedSearch = search.trim().toLowerCase()
+  const filtered = members.filter(member => {
+    const matchesSearch = !normalizedSearch ||
+      member.profile?.full_name?.toLowerCase().includes(normalizedSearch) ||
+      member.profile?.email?.toLowerCase().includes(normalizedSearch)
+    return matchesSearch && matchesListFilter(member)
+  })
+
+  const listFilters = [
+    { id: 'all', label: 'Todos' },
+    { id: 'active', label: 'Activos' },
+    { id: 'current', label: 'Al día' },
+    { id: 'due_soon', label: 'Por vencer' },
+    { id: 'overdue', label: 'Vencidos' },
+    { id: 'pending_approval', label: 'Pago pendiente' },
+  ]
 
   const handleDelete = async (member) => {
     const { error } = await deleteMemberPermanently(member.id, member.profile_id)
@@ -66,26 +90,47 @@ export function AdminMembers({ members, plans, onRefresh, gymId }) {
         onChange={e => setSearch(e.target.value)}
       />
 
+      <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar" aria-label="Filtrar miembros">
+        {listFilters.map(filter => (
+          <button
+            key={filter.id}
+            className={`px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
+              listFilter === filter.id
+                ? 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
+                : 'bg-gray-800 text-gray-400 hover:text-white'
+            }`}
+            onClick={() => setListFilter(filter.id)}
+          >
+            {filter.label}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-3">
-        {filtered.map(m => (
+        {filtered.map(m => {
+          const paymentState = getMemberPaymentStatus(m, payments)
+          const paymentLabel = paymentStatusLabel[paymentState] || paymentStatusLabel.no_payment
+
+          return (
           <div key={m.id} className="card-hover">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center justify-between gap-2 sm:gap-3">
               <button
-                className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                className="flex items-start sm:items-center gap-3 flex-1 min-w-0 text-left"
                 onClick={() => setSelected(selected?.id === m.id ? null : m)}
               >
-                <div className="w-10 h-10 bg-brand-500/10 border border-brand-500/20 rounded-xl flex-shrink-0 flex items-center justify-center">
-                  <span className="font-bold text-brand-400">{m.profile?.full_name?.[0]?.toUpperCase()}</span>
-                </div>
+                <MemberAvatar profile={m.profile} />
                 <div className="min-w-0">
                   <p className="font-medium text-white truncate">{m.profile?.full_name}</p>
-                  <p className="text-xs text-gray-500">{m.profile?.email} · {m.plan?.name || 'Sin plan'}</p>
+                  <p className="text-xs text-gray-500 truncate">{m.profile?.email} · {m.plan?.name || 'Sin plan'}</p>
+                  <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                    <span className={m.status === 'active' ? 'badge-green' : 'badge-gray'}>
+                      {m.status === 'active' ? 'Activo' : 'Inactivo'}
+                    </span>
+                    <span className={paymentLabel.cls}>{paymentLabel.text}</span>
+                  </div>
                 </div>
               </button>
-              <div className="flex items-center gap-1">
-                <span className={m.status === 'active' ? 'badge-green' : 'badge-gray'}>
-                  {m.status === 'active' ? 'Activo' : 'Inactivo'}
-                </span>
+              <div className="flex items-center gap-1 flex-shrink-0">
                 <button className="btn-ghost p-1.5" onClick={() => setSelected(m)}>
                   <Edit2 className="w-4 h-4" />
                 </button>
@@ -99,7 +144,8 @@ export function AdminMembers({ members, plans, onRefresh, gymId }) {
               <MemberDetail member={m} plans={plans} onRefresh={onRefresh} onClose={() => setSelected(null)} />
             )}
           </div>
-        ))}
+          )
+        })}
         {filtered.length === 0 && (
           <EmptyState
             icon={Users}
@@ -117,6 +163,30 @@ export function AdminMembers({ members, plans, onRefresh, gymId }) {
       />
 
       <CreateMemberModal open={showCreate} onClose={() => { setShowCreate(false); onRefresh() }} plans={plans} gymId={gymId} />
+    </div>
+  )
+}
+
+function MemberAvatar({ profile }) {
+  const [imageFailed, setImageFailed] = useState(false)
+
+  useEffect(() => setImageFailed(false), [profile?.avatar_url])
+
+  return (
+    <div className="w-12 h-12 bg-brand-500/10 border border-brand-500/20 rounded-xl flex-shrink-0 overflow-hidden flex items-center justify-center">
+      {profile?.avatar_url && !imageFailed ? (
+        <img
+          src={profile.avatar_url}
+          alt={`Foto de ${profile.full_name || 'miembro'}`}
+          className="w-full h-full object-cover"
+          loading="lazy"
+          onError={() => setImageFailed(true)}
+        />
+      ) : (
+        <span className="font-bold text-brand-400 text-lg">
+          {profile?.full_name?.[0]?.toUpperCase() || '?'}
+        </span>
+      )}
     </div>
   )
 }

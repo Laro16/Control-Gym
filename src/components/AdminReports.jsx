@@ -1,63 +1,112 @@
 import { useState } from 'react'
-import { FileText, FileSpreadsheet, Users } from 'lucide-react'
+import { FileText, FileSpreadsheet, Loader2 } from 'lucide-react'
 import {
-  supabase, adminCreateUser,
-  getMembers, getPayments, getMeasurements, getProgressPhotos,
-  createMeasurement,
-  updateMember, getPlans, createPlan, updatePlan,
-  deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
-  createNotification, getMemberByProfile, getAttendance,
-  markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto
-} from '../supabase'
+  generatePaymentHistoryPDF,
+} from '../utils/pdfExports'
 import {
-  formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
-  approvalStatusLabel, measurementFields, getMeasurementDiff,
-  displayValue, getMeasurementComment, daysBetween,
-  generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
-  generateMasterExcel, today, addDays, calculateStreak
-} from '../utils/helpers'
-import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
-import { Modal, ConfirmModal, Spinner } from './shared'
+  generatePaymentHistoryExcel,
+  generateMasterExcel,
+} from '../utils/excelExports'
+import { toast } from './shared'
 
-// ── ADMIN REPORTS ──────────────────────────────────────────
 export function AdminReports({ members, payments }) {
   const [selectedMember, setSelectedMember] = useState('')
+  const [exporting, setExporting] = useState(null)
 
-  const member = members.find(m => m.id === selectedMember)
-  const memberPayments = payments.filter(p => p.member_id === selectedMember)
+  const member = members.find(item => item.id === selectedMember)
+  const memberPayments = payments.filter(payment => payment.member_id === selectedMember)
+
+  const runExport = async (id, action, successMessage) => {
+    if (exporting) return
+    setExporting(id)
+    try {
+      await action()
+      toast.success(successMessage)
+    } catch (error) {
+      console.error(`Error al generar ${id}:`, error)
+      toast.error(error?.message || 'No se pudo generar el archivo. Recarga la aplicación e intenta de nuevo.')
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const ExportIcon = ({ id, icon: Icon }) => (
+    exporting === id
+      ? <Loader2 className="w-4 h-4 animate-spin" />
+      : <Icon className="w-4 h-4" />
+  )
 
   return (
     <div className="space-y-6 animate-fade-in">
       <h2 className="section-title">Reportes</h2>
 
-      {/* Descarga global */}
       <div className="card">
         <h3 className="font-semibold text-white mb-3">Reporte global</h3>
-        <p className="text-sm text-gray-400 mb-4">Descarga toda la información del gimnasio</p>
-        <button className="btn-primary" onClick={() => generateMasterExcel(members, payments)}>
-          <FileSpreadsheet className="w-4 h-4" /> Descargar Excel maestro
+        <p className="text-sm text-gray-400 mb-4">
+          Descarga en un solo Excel las hojas de miembros y pagos del gimnasio.
+        </p>
+        <button
+          className="btn-primary"
+          disabled={!!exporting}
+          onClick={() => runExport(
+            'master-excel',
+            () => generateMasterExcel(members, payments),
+            'Reporte global descargado',
+          )}
+        >
+          <ExportIcon id="master-excel" icon={FileSpreadsheet} />
+          {exporting === 'master-excel' ? 'Generando Excel...' : 'Descargar Excel maestro'}
         </button>
       </div>
 
-      {/* Por miembro */}
       <div className="card">
         <h3 className="font-semibold text-white mb-3">Reporte por miembro</h3>
         <div className="space-y-3">
           <div>
             <label className="label">Seleccionar miembro</label>
-            <select className="input" value={selectedMember} onChange={e => setSelectedMember(e.target.value)}>
+            <select
+              className="input"
+              value={selectedMember}
+              onChange={event => setSelectedMember(event.target.value)}
+            >
               <option value="">— Seleccionar —</option>
-              {members.map(m => <option key={m.id} value={m.id}>{m.profile?.full_name}</option>)}
+              {members.map(item => (
+                <option key={item.id} value={item.id}>{item.profile?.full_name}</option>
+              ))}
             </select>
           </div>
-          {selectedMember && (
-            <div className="flex flex-wrap gap-2 mt-2">
-              <button className="btn-primary" onClick={() => generatePaymentHistoryPDF(memberPayments, member)}>
-                <FileText className="w-4 h-4" /> PDF historial
-              </button>
-              <button className="btn-secondary" onClick={() => generatePaymentHistoryExcel(memberPayments, member)}>
-                <FileSpreadsheet className="w-4 h-4" /> Excel historial
-              </button>
+
+          {member && (
+            <div className="space-y-3 pt-1">
+              <p className="text-xs text-gray-500">
+                {memberPayments.length} {memberPayments.length === 1 ? 'pago registrado' : 'pagos registrados'}
+              </p>
+              <div className="flex flex-col min-[380px]:flex-row gap-2">
+                <button
+                  className="btn-primary"
+                  disabled={!!exporting}
+                  onClick={() => runExport(
+                    'member-pdf',
+                    () => generatePaymentHistoryPDF(memberPayments, member),
+                    'PDF descargado',
+                  )}
+                >
+                  <ExportIcon id="member-pdf" icon={FileText} />
+                  {exporting === 'member-pdf' ? 'Generando PDF...' : 'PDF historial'}
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={!!exporting}
+                  onClick={() => runExport(
+                    'member-excel',
+                    () => generatePaymentHistoryExcel(memberPayments, member),
+                    'Excel descargado',
+                  )}
+                >
+                  <ExportIcon id="member-excel" icon={FileSpreadsheet} />
+                  {exporting === 'member-excel' ? 'Generando Excel...' : 'Excel historial'}
+                </button>
+              </div>
             </div>
           )}
         </div>
@@ -65,7 +114,3 @@ export function AdminReports({ members, payments }) {
     </div>
   )
 }
-
-// ════════════════════════════════════════════════════════════
-// USER DASHBOARD
-// ════════════════════════════════════════════════════════════

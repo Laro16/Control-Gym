@@ -22,11 +22,11 @@ import {
   formatDate, formatCurrency, getPaymentStatus, paymentStatusLabel,
   approvalStatusLabel, measurementFields, getMeasurementDiff,
   displayValue, getMeasurementComment, daysBetween,
-  generatePaymentPDF, generatePaymentHistoryPDF, generatePaymentHistoryExcel,
-  generateMasterExcel, today, addDays, calculateStreak, generateReceiptImage,
+  today, addDays, calculateStreak, generateReceiptImage,
   toLocalDateStr, getLastRegisteredDueDate, buildPaymentCycleDates,
   selectConsecutiveCycleDates,
 } from '../utils/helpers'
+import { generatePaymentPDF } from '../utils/pdfExports'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner, toast, EmptyState } from './shared'
 

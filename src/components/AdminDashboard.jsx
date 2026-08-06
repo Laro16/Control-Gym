@@ -36,6 +36,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [avatarPreview, setAvatarPreview]     = useState(null)
   const [uploadingLogo, setUploadingLogo] = useState(false)
+  const [memberListFilter, setMemberListFilter] = useState('all')
 
   const loadData = useCallback(async () => {
     setLoading(true)
@@ -170,22 +171,47 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     }
   }
 
+  const handleNavigate = target => {
+    if (target === 'refresh') {
+      loadData()
+      return
+    }
+
+    const destination = typeof target === 'string' ? { tab: target } : target
+    if (!destination?.tab) return
+
+    if (destination.tab === 'members') {
+      setMemberListFilter(destination.memberFilter || 'all')
+    }
+    setTab(destination.tab)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    if (navigator.vibrate) navigator.vibrate(8)
+  }
+
   return (
     <div className="min-h-dvh bg-gray-950 flex flex-col">
 
       {/* ── HEADER ───────────────────────────────────────── */}
       <header className="admin-header bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between gap-2">
 
           {/* Logo */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {gymLogo ? (
-              <img src={gymLogo} alt="logo" className="h-8 w-auto object-contain max-w-[120px]" />
+              <div className="h-10 w-[112px] min-[380px]:w-[140px] sm:w-[180px] rounded-xl bg-white border border-white/70 shadow-sm px-2 py-1 overflow-hidden flex items-center justify-center flex-shrink-0">
+                <img
+                  src={gymLogo}
+                  alt={`Logo de ${gym?.name || 'gimnasio'}`}
+                  title={gym?.name || 'Logo del gimnasio'}
+                  className="block w-full h-full object-contain"
+                  onError={() => setGymLogo(null)}
+                />
+              </div>
             ) : (
               <>
                 <Dumbbell className="w-5 h-5 text-brand-500" />
-                <span className="font-display text-xl tracking-wide text-white">
-                  {import.meta.env.VITE_GYM_NAME || 'GymApp'}
+                <span className="font-display text-xl tracking-wide text-white truncate">
+                  {gym?.name || import.meta.env.VITE_GYM_NAME || 'GymApp'}
                 </span>
               </>
             )}
@@ -303,9 +329,30 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
               </div>
             </div>
             {/* Subir logo del gimnasio */}
-            <label className={`w-full flex items-center gap-2 text-brand-400 hover:text-brand-300 text-sm py-2 px-1 rounded-lg hover:bg-brand-500/10 cursor-pointer transition-all mb-1 ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
-              <Dumbbell className="w-4 h-4" />
-              {uploadingLogo ? 'Subiendo logo...' : 'Cambiar logo del gimnasio'}
+            <div className="mb-2">
+              <p className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold mb-2">Logo del gimnasio</p>
+              <div className="h-20 w-full rounded-xl bg-white border border-white/70 px-4 py-2 flex items-center justify-center overflow-hidden">
+                {gymLogo ? (
+                  <img
+                    src={gymLogo}
+                    alt={`Logo de ${gym?.name || 'gimnasio'}`}
+                    className="block max-w-full max-h-full object-contain"
+                    onError={() => setGymLogo(null)}
+                  />
+                ) : (
+                  <div className="text-center text-gray-500">
+                    <Dumbbell className="w-6 h-6 mx-auto mb-1" />
+                    <span className="text-xs">Sin logo</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <label className={`w-full flex items-center justify-center gap-2 text-brand-400 hover:text-brand-300 text-sm py-2.5 px-3 rounded-xl bg-brand-500/10 hover:bg-brand-500/15 cursor-pointer transition-all mb-2 ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
+              {uploadingLogo
+                ? <span className="w-4 h-4 border-2 border-brand-300/30 border-t-brand-300 rounded-full animate-spin" />
+                : <Camera className="w-4 h-4" />
+              }
+              {uploadingLogo ? 'Subiendo logo...' : 'Cambiar logo'}
               <input type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
             </label>
             <button
@@ -325,7 +372,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
             {tabs.map(t => (
               <button
                 key={t.id}
-                onClick={() => setTab(t.id)}
+                onClick={() => handleNavigate(t.id)}
                 className={`admin-nav-item flex items-center gap-1.5 px-3 py-2 rounded-xl text-sm font-medium whitespace-nowrap transition-all
                   ${tab === t.id
                     ? 'admin-nav-active bg-brand-500/10 text-brand-400 border border-brand-500/20'
@@ -350,10 +397,19 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
                 payments={payments}
                 onRefresh={loadData}
                 profile={profile}
-                onNavigate={a => { if (a === 'refresh') loadData(); else setTab(a) }}
+                onNavigate={handleNavigate}
               />
             )}
-            {tab === 'members'  && <AdminMembers  members={members} plans={plans} onRefresh={loadData} gymId={profile.gym_id} />}
+            {tab === 'members'  && (
+              <AdminMembers
+                members={members}
+                payments={payments}
+                plans={plans}
+                onRefresh={loadData}
+                gymId={profile.gym_id}
+                initialFilter={memberListFilter}
+              />
+            )}
             {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} gym={gym} />}
             {tab === 'plans'    && <AdminPlans plans={plans} members={members} gymId={profile.gym_id} onRefresh={loadData} />}
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}

@@ -142,15 +142,23 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   return (
     <div className="min-h-dvh bg-gray-950 flex flex-col">
       <header className="member-header bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/70 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-4 py-3.5 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
             {gymLogo ? (
-              <img src={gymLogo} alt="logo" className="h-8 w-auto object-contain max-w-[120px]" />
+              <div className="h-10 w-[112px] min-[380px]:w-[140px] sm:w-[180px] rounded-xl bg-white border border-white/70 shadow-sm px-2 py-1 overflow-hidden flex items-center justify-center flex-shrink-0">
+                <img
+                  src={gymLogo}
+                  alt={`Logo de ${gym?.name || 'gimnasio'}`}
+                  title={gym?.name || 'Logo del gimnasio'}
+                  className="block w-full h-full object-contain"
+                  onError={() => setGymLogo(null)}
+                />
+              </div>
             ) : (
               <>
                 <Dumbbell className="w-5 h-5 text-brand-500" />
-                <span className="font-display text-xl tracking-wide text-white">
-                  {import.meta.env.VITE_GYM_NAME || 'GymApp'}
+                <span className="font-display text-xl tracking-wide text-white truncate">
+                  {gym?.name || import.meta.env.VITE_GYM_NAME || 'GymApp'}
                 </span>
               </>
             )}
