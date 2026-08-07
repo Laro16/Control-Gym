@@ -63,6 +63,8 @@ Deno.serve(async (req) => {
       const password = String(body.password ?? '')
       const fullName = cleanText(body.fullName, 160)
       const phone = cleanText(body.phone, 40)
+      const rawDpi = cleanText(body.dpi, 40)
+      const dpi = rawDpi ? rawDpi.replace(/\D/g, '') : null
       const birthDate = validDate(body.birthDate) ? body.birthDate : null
       const startDate = validDate(body.startDate) ? body.startDate : null
       const emergencyContact = cleanText(body.emergencyContact, 250)
@@ -74,6 +76,9 @@ Deno.serve(async (req) => {
       }
       if (password.length < 8) {
         return json({ error: 'La contrasena debe tener al menos 8 caracteres' }, 400)
+      }
+      if (dpi && !/^\d{13}$/.test(dpi)) {
+        return json({ error: 'El DPI debe contener exactamente 13 digitos' }, 400)
       }
 
       if (planId) {
@@ -156,12 +161,16 @@ Deno.serve(async (req) => {
         email,
         full_name: fullName,
         phone,
+        dpi,
         birth_date: birthDate,
         role: 'user',
         gym_id: gymId,
       })
       if (profileError) {
         await rollbackNewAuthUser()
+        if (profileError.code === '23505') {
+          return json({ error: 'Este DPI ya esta asignado a otro miembro del gimnasio' }, 400)
+        }
         return json({ error: 'No se pudo crear el perfil: ' + profileError.message }, 400)
       }
 
@@ -186,6 +195,87 @@ Deno.serve(async (req) => {
       }
 
       return json({ user: { id: authUserId, email }, member })
+    }
+
+    if (body.action === 'update') {
+      const memberId = cleanText(body.memberId, 80)
+      const fullName = cleanText(body.fullName, 160)
+      const phone = cleanText(body.phone, 40)
+      const rawDpi = cleanText(body.dpi, 40)
+      const dpi = rawDpi ? rawDpi.replace(/\D/g, '') : null
+      const birthDate = validDate(body.birthDate) ? body.birthDate : null
+      const startDate = validDate(body.startDate) ? body.startDate : null
+      const emergencyContact = cleanText(body.emergencyContact, 250)
+      const notes = cleanText(body.notes, 2000)
+      const planId = cleanText(body.planId, 80)
+      const status = cleanText(body.status, 30)
+
+      if (!memberId || !fullName || !startDate || !status) {
+        return json({ error: 'Faltan datos obligatorios del miembro' }, 400)
+      }
+      if (dpi && !/^\d{13}$/.test(dpi)) {
+        return json({ error: 'El DPI debe contener exactamente 13 digitos' }, 400)
+      }
+      if (!['active', 'inactive', 'suspended'].includes(status)) {
+        return json({ error: 'Estado de membresia no valido' }, 400)
+      }
+
+      const { data: target, error: targetError } = await admin
+        .from('members')
+        .select('id, profile_id, gym_id')
+        .eq('id', memberId)
+        .eq('gym_id', gymId)
+        .maybeSingle()
+
+      if (targetError) return json({ error: targetError.message }, 400)
+      if (!target) return json({ error: 'Miembro no encontrado' }, 404)
+
+      if (planId) {
+        const { data: plan } = await admin
+          .from('plans')
+          .select('id')
+          .eq('id', planId)
+          .eq('gym_id', gymId)
+          .eq('is_active', true)
+          .maybeSingle()
+        if (!plan) return json({ error: 'El plan no pertenece a este gimnasio o esta inactivo' }, 400)
+      }
+
+      const { error: profileError } = await admin
+        .from('profiles')
+        .update({
+          full_name: fullName,
+          phone,
+          dpi,
+          birth_date: birthDate,
+        })
+        .eq('id', target.profile_id)
+        .eq('gym_id', gymId)
+
+      if (profileError) {
+        if (profileError.code === '23505') {
+          return json({ error: 'Este DPI ya esta asignado a otro miembro del gimnasio' }, 400)
+        }
+        return json({ error: 'No se pudieron actualizar los datos personales: ' + profileError.message }, 400)
+      }
+
+      const { error: memberError } = await admin
+        .from('members')
+        .update({
+          status,
+          plan_id: planId,
+          start_date: startDate,
+          emergency_contact: emergencyContact,
+          notes,
+        })
+        .eq('id', memberId)
+        .eq('gym_id', gymId)
+
+      if (memberError) {
+        return json({ error: 'No se pudo actualizar la membresia: ' + memberError.message }, 400)
+      }
+
+      return json({ ok: true, memberId, profileId: target.profile_id })
     }
 
     if (body.action === 'delete') {
