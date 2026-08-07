@@ -13,12 +13,12 @@ export function GymBrand({ logoUrl, gymName, areaLabel, onLogoError }) {
   return (
     <div className="flex items-center gap-2.5 min-w-0" aria-label={`${name} · ${areaLabel}`}>
       {logoUrl ? (
-        <div className="h-12 min-w-12 max-w-[136px] rounded-2xl bg-white border border-white/80 shadow-[0_8px_24px_rgba(0,0,0,0.28)] px-1.5 py-1 flex items-center justify-center overflow-hidden flex-shrink-0">
+        <div className="h-12 min-w-12 max-w-[140px] rounded-xl bg-gray-950/70 border border-gray-700/90 shadow-[0_8px_24px_rgba(0,0,0,0.32)] p-0.5 flex items-center justify-center overflow-hidden flex-shrink-0">
           <img
             src={logoUrl}
             alt={`Logo de ${name}`}
             title={name}
-            className="block max-h-10 max-w-[124px] w-auto h-auto object-contain"
+            className="block max-h-full max-w-[136px] w-auto h-auto rounded-[10px] object-contain"
             onError={onLogoError}
           />
         </div>
