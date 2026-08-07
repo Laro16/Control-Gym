@@ -59,6 +59,7 @@ export const buildMasterWorkbookSheets = (members, payments) => {
     const dueDate = getLastRegisteredDueDate(member.id, payments)
     return {
       Nombre: member.profile?.full_name || '',
+      DPI: member.profile?.dpi || '',
       Email: member.profile?.email || '',
       Teléfono: member.profile?.phone || '',
       Inicio: formatDate(member.start_date),
