@@ -136,11 +136,31 @@ export const adminCreateUser = async (email, password, fullName, memberData = {}
     password,
     fullName,
     phone: memberData.phone || null,
+    dpi: memberData.dpi || null,
     birthDate: memberData.birth_date || null,
     planId: memberData.plan_id || null,
     startDate: memberData.start_date,
     emergencyContact: memberData.emergency_contact || null,
     notes: memberData.notes || null,
+  })
+}
+
+// Actualiza en el servidor los datos personales y de membresía de un usuario.
+// Se usa la misma Edge Function protegida para que un administrador solamente
+// pueda modificar miembros de su propio gimnasio.
+export const adminUpdateMember = async (memberId, updates = {}) => {
+  return invokeAdminUsers({
+    action: 'update',
+    memberId,
+    fullName: updates.full_name,
+    phone: updates.phone || null,
+    dpi: updates.dpi || null,
+    birthDate: updates.birth_date || null,
+    status: updates.status,
+    planId: updates.plan_id || null,
+    startDate: updates.start_date,
+    emergencyContact: updates.emergency_contact || null,
+    notes: updates.notes || null,
   })
 }
 
