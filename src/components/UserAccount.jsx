@@ -110,7 +110,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
 
   return (
     <div
-      className="fixed left-2 right-2 top-[4.25rem] sm:absolute sm:left-auto sm:right-4 sm:top-14 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
+      className="fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-4 sm:top-16 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
       onClick={e => e.stopPropagation()}
     >
       {/* ── AVATAR + NOMBRE ─────────────────────────────────── */}
@@ -203,6 +203,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
           {[
             { label: 'Nombre completo', value: profile.full_name },
             { label: 'Email',           value: profile.email },
+            { label: 'DPI',             value: profile.dpi || '—' },
             { label: 'Teléfono',        value: profile.phone || '—' },
             { label: 'Edad',            value: age ? `${age} años` : '—' },
             { label: 'Nacimiento',      value: profile.birth_date ? formatDate(profile.birth_date) : '—' },

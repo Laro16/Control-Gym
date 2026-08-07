@@ -21,6 +21,7 @@ import { AdminAnnouncements } from './AdminAnnouncements'
 import { AdminStats } from './AdminStats'
 import { CheckInQR } from './CheckInQR'
 import { GymSchedule } from './GymSchedule'
+import { GymBrand } from './GymBrand'
 
 export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [tab, setTab]             = useState('overview')
@@ -193,32 +194,15 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
 
       {/* ── HEADER ───────────────────────────────────────── */}
       <header className="admin-header bg-gray-900 border-b border-gray-800 sticky top-0 z-40">
-        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between gap-2">
+        <div className="max-w-6xl mx-auto px-4 py-2 flex items-center justify-between gap-2 min-h-[65px]">
 
           {/* Logo */}
-          <div className="flex items-center gap-2 min-w-0">
-            {gymLogo ? (
-              <div className="h-10 w-[112px] min-[380px]:w-[140px] sm:w-[180px] rounded-xl bg-white border border-white/70 shadow-sm px-2 py-1 overflow-hidden flex items-center justify-center flex-shrink-0">
-                <img
-                  src={gymLogo}
-                  alt={`Logo de ${gym?.name || 'gimnasio'}`}
-                  title={gym?.name || 'Logo del gimnasio'}
-                  className="block w-full h-full object-contain"
-                  onError={() => setGymLogo(null)}
-                />
-              </div>
-            ) : (
-              <>
-                <Dumbbell className="w-5 h-5 text-brand-500" />
-                <span className="font-display text-xl tracking-wide text-white truncate">
-                  {gym?.name || import.meta.env.VITE_GYM_NAME || 'GymApp'}
-                </span>
-              </>
-            )}
-            <span className="hidden sm:inline text-xs bg-brand-500/10 text-brand-400 border border-brand-500/20 px-2 py-0.5 rounded-full">
-              Admin
-            </span>
-          </div>
+          <GymBrand
+            logoUrl={gymLogo}
+            gymName={gym?.name}
+            areaLabel="Administración"
+            onLogoError={() => setGymLogo(null)}
+          />
 
           {/* Botones header */}
           <div className="flex items-center gap-1">
@@ -264,7 +248,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
         {/* Dropdown notificaciones */}
         {showNotifs && (
           <div
-            className="fixed left-2 right-2 top-[4.25rem] sm:absolute sm:left-auto sm:right-4 sm:top-14 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
+            className="fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-4 sm:top-16 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
@@ -292,7 +276,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
         {/* Dropdown perfil admin */}
         {showProfile && (
           <div
-            className="fixed left-2 right-2 top-[4.25rem] sm:absolute sm:left-auto sm:right-4 sm:top-14 sm:w-72 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
+            className="fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-4 sm:top-16 sm:w-72 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center gap-3 mb-4 pb-3 border-b border-gray-800">
@@ -329,14 +313,17 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
               </div>
             </div>
             {/* Subir logo del gimnasio */}
-            <div className="mb-2">
-              <p className="text-[10px] uppercase tracking-wider text-gray-600 font-semibold mb-2">Logo del gimnasio</p>
-              <div className="h-20 w-full rounded-xl bg-white border border-white/70 px-4 py-2 flex items-center justify-center overflow-hidden">
+            <div className="mb-3">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Logo del gimnasio</p>
+                <span className="text-[10px] text-gray-600">Vista previa</span>
+              </div>
+              <div className="h-32 w-full rounded-2xl bg-white border-2 border-gray-700/80 px-4 py-3 flex items-center justify-center overflow-hidden shadow-inner">
                 {gymLogo ? (
                   <img
                     src={gymLogo}
                     alt={`Logo de ${gym?.name || 'gimnasio'}`}
-                    className="block max-w-full max-h-full object-contain"
+                    className="block max-w-full max-h-full w-auto h-auto object-contain"
                     onError={() => setGymLogo(null)}
                   />
                 ) : (
@@ -346,6 +333,9 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
                   </div>
                 )}
               </div>
+              <p className="text-[10px] leading-relaxed text-gray-600 mt-2">
+                Se mostrará completo y sin recortes. Para un mejor resultado utiliza PNG o WebP con poco espacio alrededor del diseño.
+              </p>
             </div>
             <label className={`w-full flex items-center justify-center gap-2 text-brand-400 hover:text-brand-300 text-sm py-2.5 px-3 rounded-xl bg-brand-500/10 hover:bg-brand-500/15 cursor-pointer transition-all mb-2 ${uploadingLogo ? 'opacity-50 pointer-events-none' : ''}`}>
               {uploadingLogo
@@ -366,7 +356,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
       </header>
 
       {/* ── NAV TABS ─────────────────────────────────────── */}
-      <nav className="admin-nav lm-nav border-b border-gray-800 sticky top-[57px] z-30">
+      <nav className="admin-nav lm-nav border-b border-gray-800 sticky top-[65px] z-30">
         <div className="max-w-6xl mx-auto px-4">
           <div className="flex gap-1.5 overflow-x-auto py-2 no-scrollbar">
             {tabs.map(t => (

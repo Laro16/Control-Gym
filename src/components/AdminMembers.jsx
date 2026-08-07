@@ -9,10 +9,10 @@ import {
 } from 'lucide-react'
 import { playNotifSound, playAchievementSound } from '../App'
 import {
-  supabase, adminCreateUser,
+  supabase, adminCreateUser, adminUpdateMember,
   getMembers, getPayments, getMeasurements, getProgressPhotos,
   createMeasurement,
-  updateMember, getPlans, createPlan, updatePlan,  
+  getPlans, createPlan, updatePlan,  
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
   markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto,
@@ -26,6 +26,8 @@ import {
 } from '../utils/helpers'
 import { sendVoucherToAdmin, sendPaymentReminder } from '../utils/whatsapp'
 import { Modal, ConfirmModal, Spinner, EmptyState, toast } from './shared'
+
+const normalizeDpi = value => String(value || '').replace(/\D/g, '').slice(0, 13)
 
 // ── ADMIN MEMBERS ──────────────────────────────────────────
 export function AdminMembers({ members, payments, plans, onRefresh, gymId, initialFilter = 'all' }) {
@@ -51,7 +53,8 @@ export function AdminMembers({ members, payments, plans, onRefresh, gymId, initi
   const filtered = members.filter(member => {
     const matchesSearch = !normalizedSearch ||
       member.profile?.full_name?.toLowerCase().includes(normalizedSearch) ||
-      member.profile?.email?.toLowerCase().includes(normalizedSearch)
+      member.profile?.email?.toLowerCase().includes(normalizedSearch) ||
+      member.profile?.dpi?.includes(normalizedSearch.replace(/\D/g, ''))
     return matchesSearch && matchesListFilter(member)
   })
 
@@ -85,7 +88,7 @@ export function AdminMembers({ members, payments, plans, onRefresh, gymId, initi
 
       <input
         className="input"
-        placeholder="Buscar por nombre o email..."
+        placeholder="Buscar por nombre, email o DPI..."
         value={search}
         onChange={e => setSearch(e.target.value)}
       />
@@ -251,7 +254,7 @@ function MemberDetail({ member, plans, onRefresh, onClose }) {
 
       {!loadingData && tab === 'info' && (
         <EditMemberForm member={member} plans={plans} onSave={async (updates) => {
-          const { error } = await updateMember(member.id, updates)
+          const { error } = await adminUpdateMember(member.id, updates)
           if (error) throw error
           await onRefresh()
         }} />
@@ -394,6 +397,10 @@ function AttendanceManager({ memberId, attendance, onChange }) {
 
 function EditMemberForm({ member, plans, onSave }) {
   const [form, setForm] = useState({
+    full_name: member.profile?.full_name || '',
+    phone: member.profile?.phone || '',
+    dpi: member.profile?.dpi || '',
+    birth_date: member.profile?.birth_date || '',
     status: member.status || 'active',
     plan_id: member.plan_id || '',
     start_date: member.start_date || today(),
@@ -404,6 +411,14 @@ function EditMemberForm({ member, plans, onSave }) {
   const [saved, setSaved] = useState(false)
 
   const handleSave = async () => {
+    if (!form.full_name.trim()) {
+      toast.error('El nombre completo es obligatorio')
+      return
+    }
+    if (form.dpi && form.dpi.length !== 13) {
+      toast.error('El DPI debe contener exactamente 13 dígitos')
+      return
+    }
     setSaving(true)
     try {
       await onSave(form)
@@ -419,6 +434,60 @@ function EditMemberForm({ member, plans, onSave }) {
 
   return (
     <div className="space-y-3">
+      <div className="rounded-xl bg-gray-800/35 border border-gray-700/70 p-3 space-y-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500">Datos personales</p>
+        <div>
+          <label className="label">Nombre completo *</label>
+          <input
+            className="input"
+            value={form.full_name}
+            onChange={e => setForm({ ...form, full_name: e.target.value })}
+          />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label">DPI</label>
+            <input
+              className="input"
+              inputMode="numeric"
+              autoComplete="off"
+              maxLength={13}
+              placeholder="13 dígitos"
+              value={form.dpi}
+              onChange={e => setForm({ ...form, dpi: normalizeDpi(e.target.value) })}
+            />
+            <p className="text-[10px] text-gray-600 mt-1">{form.dpi.length}/13 dígitos</p>
+          </div>
+          <div>
+            <label className="label">Teléfono</label>
+            <input
+              className="input"
+              inputMode="tel"
+              value={form.phone}
+              onChange={e => setForm({ ...form, phone: e.target.value })}
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label className="label">Fecha de nacimiento</label>
+            <input
+              type="date"
+              className="input"
+              value={form.birth_date}
+              onChange={e => setForm({ ...form, birth_date: e.target.value })}
+            />
+          </div>
+          <div>
+            <label className="label">Correo de acceso</label>
+            <div className="input flex items-center text-gray-500 cursor-not-allowed overflow-hidden">
+              <span className="truncate">{member.profile?.email || '—'}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[11px] font-semibold uppercase tracking-wider text-gray-500 pt-1">Membresía</p>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
           <label className="label">Estado</label>
@@ -597,7 +666,7 @@ function MeasurementForm({ memberId, onSave }) {
 function CreateMemberModal({ open, onClose, plans, gymId }) {
   const [step, setStep] = useState(1)
   const [form, setForm] = useState({
-    full_name: '', email: '', phone: '', password: '',
+    full_name: '', email: '', phone: '', dpi: '', password: '',
     plan_id: '', start_date: today(), birth_date: '',
     emergency_contact: '', notes: ''
   })
@@ -612,6 +681,10 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
     }
     if (form.password.length < 8) {
       setError('La contraseña debe tener al menos 8 caracteres')
+      return
+    }
+    if (form.dpi && form.dpi.length !== 13) {
+      setError('El DPI debe contener exactamente 13 dígitos')
       return
     }
     setLoading(true)
@@ -648,7 +721,7 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
     setTimeout(() => {
       setSuccess(false)
       setStep(1)
-      setForm({ full_name: '', email: '', phone: '', password: '', plan_id: '', start_date: today(), birth_date: '', emergency_contact: '', notes: '' })
+      setForm({ full_name: '', email: '', phone: '', dpi: '', password: '', plan_id: '', start_date: today(), birth_date: '', emergency_contact: '', notes: '' })
       onClose()
     }, 2000)
   }
@@ -667,6 +740,18 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
             <>
               <div><label className="label">Nombre completo *</label>
                 <input className="input" value={form.full_name} onChange={e => setForm({ ...form, full_name: e.target.value })} /></div>
+              <div><label className="label">DPI</label>
+                <input
+                  className="input"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={13}
+                  placeholder="13 dígitos"
+                  value={form.dpi}
+                  onChange={e => setForm({ ...form, dpi: normalizeDpi(e.target.value) })}
+                />
+                <p className="text-[10px] text-gray-600 mt-1">{form.dpi.length}/13 dígitos</p>
+              </div>
               <div><label className="label">Email *</label>
                 <input type="email" className="input" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
               <div><label className="label">Contraseña temporal *</label>
@@ -675,7 +760,13 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
                 <input className="input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
               <div><label className="label">Fecha de nacimiento</label>
                 <input type="date" className="input" value={form.birth_date} onChange={e => setForm({ ...form, birth_date: e.target.value })} /></div>
-              <button className="btn-primary w-full" onClick={() => { if (!form.email || !form.full_name || !form.password) { setError('Campos obligatorios incompletos'); return } setError(''); setStep(2) }}>
+              <button className="btn-primary w-full" onClick={() => {
+                if (!form.email || !form.full_name || !form.password) { setError('Campos obligatorios incompletos'); return }
+                if (form.password.length < 8) { setError('La contraseña debe tener al menos 8 caracteres'); return }
+                if (form.dpi && form.dpi.length !== 13) { setError('El DPI debe contener exactamente 13 dígitos'); return }
+                setError('')
+                setStep(2)
+              }}>
                 Siguiente <ChevronRight className="w-4 h-4" />
               </button>
             </>

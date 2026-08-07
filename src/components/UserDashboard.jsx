@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
-  Dumbbell, Bell, Sun, Moon, LogOut, Home, CreditCard,
+  Bell, Sun, Moon, LogOut, Home, CreditCard,
   TrendingUp, Calendar, ClipboardList, X
 } from 'lucide-react'
 import { playNotifSound } from '../App'
@@ -19,6 +19,7 @@ import { UserBody } from './UserBody'
 import { UserStreak } from './UserStreak'
 import { UserPlans } from './UserPlans'
 import { UserAccountPanel } from './UserAccount'
+import { GymBrand } from './GymBrand'
 
 export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onProfileUpdate }) {
   const [tab, setTab] = useState('home')
@@ -142,27 +143,13 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
   return (
     <div className="min-h-dvh bg-gray-950 flex flex-col">
       <header className="member-header bg-gray-950/90 backdrop-blur-xl border-b border-gray-800/70 sticky top-0 z-40">
-        <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 min-w-0">
-            {gymLogo ? (
-              <div className="h-10 w-[112px] min-[380px]:w-[140px] sm:w-[180px] rounded-xl bg-white border border-white/70 shadow-sm px-2 py-1 overflow-hidden flex items-center justify-center flex-shrink-0">
-                <img
-                  src={gymLogo}
-                  alt={`Logo de ${gym?.name || 'gimnasio'}`}
-                  title={gym?.name || 'Logo del gimnasio'}
-                  className="block w-full h-full object-contain"
-                  onError={() => setGymLogo(null)}
-                />
-              </div>
-            ) : (
-              <>
-                <Dumbbell className="w-5 h-5 text-brand-500" />
-                <span className="font-display text-xl tracking-wide text-white truncate">
-                  {gym?.name || import.meta.env.VITE_GYM_NAME || 'GymApp'}
-                </span>
-              </>
-            )}
-          </div>
+        <div className="max-w-2xl mx-auto px-4 py-2 flex items-center justify-between gap-2 min-h-[65px]">
+          <GymBrand
+            logoUrl={gymLogo}
+            gymName={gym?.name}
+            areaLabel="Área de miembros"
+            onLogoError={() => setGymLogo(null)}
+          />
           <div className="flex items-center gap-1">
             {/* Modo claro/oscuro */}
             <button className="btn-ghost p-2" onClick={onToggleDark} title={darkMode ? "Modo claro" : "Modo oscuro"}>
@@ -185,7 +172,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
           </div>
         </div>
         {showNotifs && (
-          <div className="fixed left-2 right-2 top-[4.25rem] sm:absolute sm:left-auto sm:right-4 sm:top-14 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto">
+          <div className="fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-4 sm:top-16 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto">
             <p className="text-xs font-semibold text-gray-500 mb-2">Notificaciones</p>
             {notifications.length === 0 ? <p className="text-gray-500 text-sm">Sin notificaciones</p> :
               notifications.slice(0, 15).map(n => (
@@ -210,7 +197,7 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
       </header>
 
       {/* TOP NAV — solo desktop */}
-      <nav className="hidden md:block lm-nav border-b border-gray-800 sticky top-[57px] z-30">
+      <nav className="hidden md:block lm-nav border-b border-gray-800 sticky top-[65px] z-30">
         <div className="max-w-2xl mx-auto px-4">
           <div className="flex gap-1 py-1">
             {tabs.map(t => (
