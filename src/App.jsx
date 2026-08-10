@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { supabase, signOut } from './supabase'
 import Login from './components/Login'
 import { Toaster, PageSkeleton } from './components/shared'
-import { AdminMfaGate, ForcePasswordChange, RecoveryPasswordGate } from './components/SecurityGates'
+import { ForcePasswordChange, RecoveryPasswordGate } from './components/SecurityGates'
 
 // ── CODE SPLITTING ─────────────────────────────────────────
 // Cada rol descarga solo su parte: los miembros nunca bajan el
@@ -188,11 +188,9 @@ export default function App() {
     const props = { profile, onLogout: handleLogout, darkMode, onToggleDark: () => setDarkMode(d => !d) }
     if (profile.role === 'admin') {
       return (
-        <AdminMfaGate onLogout={handleLogout}>
-          <Suspense fallback={<LazyFallback />}>
-            <AdminDashboard {...props} /><Toaster />
-          </Suspense>
-        </AdminMfaGate>
+        <Suspense fallback={<LazyFallback />}>
+          <AdminDashboard {...props} /><Toaster />
+        </Suspense>
       )
     }
     return (
