@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import {
   Dumbbell, Bell, Sun, Moon, LogOut, Home, Users,
-  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, QrCode, CalendarDays
+  CreditCard, Layers, FileText, X, Megaphone, BarChart3, Camera, QrCode, CalendarDays, History
 } from 'lucide-react'
 import { playNotifSound } from '../App'
 import {
@@ -9,7 +9,7 @@ import {
   getMembers, getPayments, getPlans, getNotifications,
   markAllNotificationsRead, validateImageFile
 } from '../supabase'
-import { formatDate } from '../utils/helpers'
+import { formatDate, setGymTimeZone } from '../utils/helpers'
 import { toast, PageSkeleton, PullToRefresh } from './shared'
 import { applyGymTheme } from '../utils/theme'
 import { AdminOverview } from './AdminOverview'
@@ -22,6 +22,7 @@ import { AdminStats } from './AdminStats'
 import { CheckInQR } from './CheckInQR'
 import { GymSchedule } from './GymSchedule'
 import { GymBrand } from './GymBrand'
+import { AdminAudit } from './AdminAudit'
 
 export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
   const [tab, setTab]             = useState('overview')
@@ -56,15 +57,16 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     const firstError = m.error || p.error || pl.error || n.error
     if (firstError) toast.error(firstError.message || 'No se pudieron cargar todos los datos')
 
-    // Las notificaciones automáticas (cuota vencida / por vencer) ahora
-    // las genera Supabase cada mañana con pg_cron — ver fase-final.sql.
+    // Las notificaciones automáticas las genera la función versionada
+    // generate_payment_notifications mediante pg_cron.
 
     // Cargar logo del gimnasio (el propio del admin)
     const { data: gymData, error: gymError } = await supabase
-      .from('gyms').select('name, logo_url, whatsapp_number, primary_color').eq('id', profile.gym_id).single()
+      .from('gyms').select('name, logo_url, whatsapp_number, primary_color, timezone').eq('id', profile.gym_id).single()
     setGym(gymData || null)
     setGymLogo(gymData?.logo_url || null)
     applyGymTheme(gymData?.primary_color)
+    if (gymData?.timezone) setGymTimeZone(gymData.timezone)
     if (gymError) toast.error(gymError.message || 'No se pudo cargar la configuración del gimnasio')
   }, [profile.id, profile.gym_id])
 
@@ -82,6 +84,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
     { id: 'checkin',        label: 'Check-in',  icon: QrCode },
     { id: 'calendar',       label: 'Calendario', icon: CalendarDays },
     { id: 'reports',        label: 'Reportes',  icon: FileText },
+    { id: 'audit',          label: 'Bitácora',  icon: History },
   ]
 
   const handleAvatarUpload = async (e) => {
@@ -404,6 +407,7 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
             {tab === 'plans'    && <AdminPlans plans={plans} members={members} gymId={profile.gym_id} onRefresh={loadData} />}
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
             {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
+            {tab === 'audit'         && <AdminAudit />}
             {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} gymId={profile.gym_id} onRefresh={loadData} />}
             {tab === 'checkin'       && (
               <div className="space-y-8">

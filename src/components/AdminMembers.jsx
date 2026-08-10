@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Users, CreditCard, Bell, ChevronRight,
-  Plus, Edit2, Trash2, Check, X, Download, FileText, FileSpreadsheet,
+  Plus, Edit2, Archive, RotateCcw, Check, X, Download, FileText, FileSpreadsheet,
   Dumbbell, TrendingUp, TrendingDown, Minus, Camera, Calendar,
   LogOut, Home, ClipboardList, MessageCircle, Eye,
   AlertCircle, CheckCircle, Clock, Banknote, AlertTriangle, Layers,
@@ -16,7 +16,7 @@ import {
   deletePlan, uploadVoucher, getNotifications, markAllNotificationsRead,
   createNotification, getMemberByProfile, getAttendance,
   markAttendance, removeAttendance, uploadProgressPhoto, createProgressPhoto,
-  deleteMemberPermanently
+  archiveMember, reactivateMember
 } from '../supabase'
 import {
   formatDate, formatCurrency, getPaymentStatus, getMemberPaymentStatus, paymentStatusLabel,
@@ -41,6 +41,8 @@ export function AdminMembers({ members, payments, plans, onRefresh, gymId, initi
 
   const matchesListFilter = member => {
     const paymentState = getMemberPaymentStatus(member, payments)
+    if (listFilter === 'archived') return !!member.archived_at
+    if (member.archived_at) return false
     if (listFilter === 'active') return member.status === 'active'
     if (listFilter === 'overdue') return paymentState === 'overdue'
     if (listFilter === 'due_soon') return paymentState === 'due_soon'
@@ -65,15 +67,23 @@ export function AdminMembers({ members, payments, plans, onRefresh, gymId, initi
     { id: 'due_soon', label: 'Por vencer' },
     { id: 'overdue', label: 'Vencidos' },
     { id: 'pending_approval', label: 'Pago pendiente' },
+    { id: 'archived', label: 'Archivados' },
   ]
 
-  const handleDelete = async (member) => {
-    const { error } = await deleteMemberPermanently(member.id, member.profile_id)
+  const handleArchive = async (member) => {
+    const { error } = await archiveMember(member.id)
     if (error) {
-      toast.error(error.message || 'No se pudo eliminar el miembro')
+      toast.error(error.message || 'No se pudo archivar el miembro')
       return
     }
-    toast.success('Miembro eliminado permanentemente')
+    toast.success('Miembro archivado. Su historial se conservó.')
+    onRefresh()
+  }
+
+  const handleRestore = async (member) => {
+    const { error } = await reactivateMember(member.id)
+    if (error) { toast.error(error.message || 'No se pudo restaurar el miembro'); return }
+    toast.success('Miembro restaurado y acceso reactivado')
     onRefresh()
   }
 
@@ -134,12 +144,20 @@ export function AdminMembers({ members, payments, plans, onRefresh, gymId, initi
                 </div>
               </button>
               <div className="flex items-center gap-1 flex-shrink-0">
-                <button className="btn-ghost p-1.5" onClick={() => setSelected(m)}>
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button className="btn-danger p-1.5" onClick={() => setConfirmDelete(m)} aria-label={`Eliminar a ${m.profile?.full_name || 'miembro'}`}>
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                {!m.archived_at && (
+                  <button className="btn-ghost p-1.5" onClick={() => setSelected(m)}>
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                )}
+                {m.archived_at ? (
+                  <button className="btn-secondary p-1.5" onClick={() => handleRestore(m)} aria-label={`Restaurar a ${m.profile?.full_name || 'miembro'}`}>
+                    <RotateCcw className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button className="btn-danger p-1.5" onClick={() => setConfirmDelete(m)} aria-label={`Archivar a ${m.profile?.full_name || 'miembro'}`}>
+                    <Archive className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -161,8 +179,8 @@ export function AdminMembers({ members, payments, plans, onRefresh, gymId, initi
       <ConfirmModal
         open={!!confirmDelete}
         onClose={() => setConfirmDelete(null)}
-        onConfirm={() => handleDelete(confirmDelete)}
-        message={`¿Eliminar permanentemente a ${confirmDelete?.profile?.full_name || 'este miembro'}? También se eliminarán sus pagos, asistencias, fotos y acceso.`}
+        onConfirm={() => handleArchive(confirmDelete)}
+        message={`¿Archivar a ${confirmDelete?.profile?.full_name || 'este miembro'}? Se bloqueará su acceso, pero sus pagos, asistencias y archivos se conservarán.`}
       />
 
       <CreateMemberModal open={showCreate} onClose={() => { setShowCreate(false); onRefresh() }} plans={plans} gymId={gymId} />
@@ -679,8 +697,8 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
       setError('Nombre, email y contraseña son obligatorios')
       return
     }
-    if (form.password.length < 8) {
-      setError('La contraseña debe tener al menos 8 caracteres')
+    if (form.password.length < 10) {
+      setError('La contraseña temporal debe tener al menos 10 caracteres')
       return
     }
     if (form.dpi && form.dpi.length !== 13) {
@@ -732,7 +750,7 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
         <div className="text-center py-6">
           <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-2" />
           <p className="font-semibold text-white">¡Miembro creado con éxito!</p>
-          <p className="text-sm text-gray-400 mt-1">Ya puede iniciar sesión con su correo y contraseña</p>
+          <p className="text-sm text-gray-400 mt-1">Al entrar deberá sustituir la contraseña temporal por una personal.</p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -755,14 +773,14 @@ function CreateMemberModal({ open, onClose, plans, gymId }) {
               <div><label className="label">Email *</label>
                 <input type="email" className="input" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} /></div>
               <div><label className="label">Contraseña temporal *</label>
-                <input type="password" autoComplete="new-password" className="input" placeholder="Mínimo 8 caracteres" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
+                <input type="password" autoComplete="new-password" className="input" placeholder="Mínimo 10 caracteres" value={form.password} onChange={e => setForm({ ...form, password: e.target.value })} /></div>
               <div><label className="label">Teléfono</label>
                 <input className="input" value={form.phone} onChange={e => setForm({ ...form, phone: e.target.value })} /></div>
               <div><label className="label">Fecha de nacimiento</label>
                 <input type="date" className="input" value={form.birth_date} onChange={e => setForm({ ...form, birth_date: e.target.value })} /></div>
               <button className="btn-primary w-full" onClick={() => {
                 if (!form.email || !form.full_name || !form.password) { setError('Campos obligatorios incompletos'); return }
-                if (form.password.length < 8) { setError('La contraseña debe tener al menos 8 caracteres'); return }
+                if (form.password.length < 10) { setError('La contraseña temporal debe tener al menos 10 caracteres'); return }
                 if (form.dpi && form.dpi.length !== 13) { setError('El DPI debe contener exactamente 13 dígitos'); return }
                 setError('')
                 setStep(2)

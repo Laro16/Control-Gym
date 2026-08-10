@@ -69,7 +69,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
   // ── CAMBIAR CONTRASEÑA ────────────────────────────────────
   const handleChangePassword = async () => {
     setMsg(null)
-    if (newPassword.length < 8) { setMsg({ text: 'Mínimo 8 caracteres', ok: false }); return }
+    if (newPassword.length < 10) { setMsg({ text: 'Mínimo 10 caracteres', ok: false }); return }
     if (newPassword !== confirmPass) { setMsg({ text: 'Las contraseñas no coinciden', ok: false }); return }
     setSaving(true)
     const { error } = await supabase.auth.updateUser({ password: newPassword })

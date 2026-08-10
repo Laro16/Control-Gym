@@ -1,52 +1,72 @@
-# Pasos para actualizar Control Gym
+# Actualizar Control Gym con seguridad
 
-## 1. Supabase primero
+## 1. Preflight y backup
 
-Antes de subir el frontend:
+1. Crea un backup del proyecto Supabase.
+2. Ejecuta `supabase/preflight_existing.sql` en SQL Editor.
+3. Debe existir exactamente un gimnasio.
+4. Las consultas de DPI duplicado, plan de otro gimnasio, referencias sin gimnasio y duplicados deben devolver cero filas.
+5. Si aparece una fila, corrige ese dato antes de continuar.
 
-1. Entra a Supabase.
-2. Abre **SQL Editor**.
-3. Abre en este proyecto el archivo `supabase/migrations/20260804_financial_integrity.sql`.
-4. Copia todo su contenido, pégalo en SQL Editor y presiona **Run**.
-5. Debe finalizar sin mensajes rojos.
+## 2. Migración Supabase
 
-No necesitas Supabase Pro ni crear un backup para ejecutar esta migración. No elimina pagos: los posibles duplicados quedan rechazados y documentados.
-
-## 2. Reemplazar el proyecto en GitHub
-
-1. Descomprime el ZIP completo.
-2. Copia su contenido sobre tu copia local del repositorio, respetando las carpetas.
-3. No copies `node_modules` ni `dist`; no vienen incluidos y Vercel los genera.
-4. Confirma los cambios con el mensaje:
+Ejecuta completo:
 
 ```text
-Actualiza Control Gym: integridad de cuotas, pagos y diseño móvil
+supabase/migrations/20260808_single_gym_hardening.sql
 ```
 
-5. Sube el commit a GitHub.
+La migración no borra miembros, pagos ni archivos. Crea bitácora, MFA administrativo, tokens temporales de check-in, archivado y límites de Storage.
 
-Si trabajas desde la web de GitHub, no subas el ZIP como un archivo: descomprímelo y carga el contenido dentro de la raíz del repositorio.
+Si el SQL muestra un `NOTICE` indicando que no pudo configurar `pg_cron`, habilita la extensión en Database > Extensions, vuelve a ejecutar la migración y confirma el job con:
 
-## 3. Vercel
+```sql
+select jobid, jobname, schedule, active
+from cron.job
+where jobname = 'control-gym-payment-notifications';
+```
 
-Vercel iniciará el deploy automáticamente. Cuando indique **Ready**:
+## 3. Edge Function
 
-1. Cierra por completo todas las pestañas de Control Gym.
-2. Si la tienes instalada como PWA, ciérrala también.
-3. Abre nuevamente la aplicación.
+Despliega `supabase/functions/admin-users/index.ts` con nombre exacto `admin-users` y verificación JWT activa.
 
-## 4. Pruebas rápidas obligatorias
+Configura el secreto, sustituyendo tu dominio:
 
-Realiza estas pruebas con datos de prueba:
+```text
+APP_ORIGINS=https://tu-app.vercel.app
+```
 
-1. Admin → **Inicio** → presiona **Cuotas vencidas** y confirma que baja a la lista filtrada.
-2. Admin → **Pagos** → registra un pago en efectivo y comprueba el nuevo vencimiento.
-3. Cliente → **Pagos** → selecciona el tercer ciclo; deben seleccionarse también el primero y segundo.
-4. Cliente → envía un comprobante; el admin debe recibir una notificación.
-5. Admin → aprueba el pago; si el comprobante cubre varias cuotas, todas deben
-   quedar aprobadas y el cliente debe recibir una sola notificación.
-6. Admin → intenta archivar un plan que tenga miembros; el sistema debe impedirlo.
-7. Admin → **Calendario** → configura si se permite check-in con cuota vencida.
-8. En celular abre el perfil y confirma que **Cerrar sesión** queda visible y no se traslapa.
+No copies ni expongas `SUPABASE_SERVICE_ROLE_KEY`; Supabase la proporciona a la función en servidor.
 
-También puedes ejecutar `supabase/verification_queries.sql` en SQL Editor. Las consultas de duplicados deben devolver cero filas.
+## 4. Authentication
+
+En Authentication > URL Configuration:
+
+- Site URL: tu dominio de producción.
+- Redirect URLs: producción y previews necesarios.
+
+En Authentication activa TOTP, desactiva signup público, fija mínimo 10 caracteres y configura SMTP. En el siguiente acceso cada administrador deberá enrolar su autenticador.
+
+## 5. Vercel
+
+Configura las variables descritas en README y despliega el repositorio completo. La CSP permite dominios `*.supabase.co`; si utilizas un dominio Supabase personalizado, agrégalo a `vercel.json`.
+
+## 6. Verificación
+
+Ejecuta `supabase/verification_queries.sql` y realiza estas pruebas con datos de prueba:
+
+1. Admin inicia sesión, enrola MFA y abre el panel.
+2. Crea un miembro; al primer login se exige cambiar la contraseña temporal.
+3. Usa “Olvidé mi contraseña” y confirma el enlace SMTP.
+4. Abre Check-in: el QR debe mostrar cuenta regresiva y renovarse.
+5. Un token vencido debe fallar.
+6. Con `allow_overdue_checkin=false`, un pago pendiente no debe permitir entrada; uno aprobado sí.
+7. Envía un voucher y apruébalo; una sesión de miembro no debe poder sobrescribirlo ni borrarlo.
+8. Archiva y restaura un miembro; sus pagos deben permanecer.
+9. Intenta archivar un plan asignado; debe fallar.
+10. Revisa la pestaña Bitácora y confirma los eventos.
+11. Carga más de 1,000 pagos/asistencias en un entorno de prueba y confirma que la paginación recupera todos.
+
+## 7. Rollback
+
+No reviertas con borrados manuales. Si la migración falla, conserva el mensaje completo y restaura el backup solo si hubo cambios fuera de la transacción. La migración principal usa una transacción y se revierte automáticamente ante errores.

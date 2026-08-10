@@ -10,7 +10,7 @@ import {
   getProgressPhotos, getAttendance, getNotifications,
   markAllNotificationsRead, getPlans
 } from '../supabase'
-import { formatDate, today } from '../utils/helpers'
+import { formatDate, setGymTimeZone, today } from '../utils/helpers'
 import { PageSkeleton, PullToRefresh, toast } from './shared'
 import { applyGymTheme } from '../utils/theme'
 import { UserHome } from './UserHome'
@@ -75,10 +75,11 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
 
     // Datos del gimnasio del miembro: logo + config de racha
     const { data: gymData, error: gymError } = await supabase
-      .from('gyms').select('name, logo_url, whatsapp_number, closed_weekdays, holidays, primary_color').eq('id', profile.gym_id).single()
+      .from('gyms').select('name, logo_url, whatsapp_number, closed_weekdays, holidays, primary_color, timezone').eq('id', profile.gym_id).single()
     setGym(gymData || null)
     setGymLogo(gymData?.logo_url || null)
     applyGymTheme(gymData?.primary_color)
+    if (gymData?.timezone) setGymTimeZone(gymData.timezone)
     if (gymError) toast.error(gymError.message || 'No se pudo cargar la configuración del gimnasio')
     if (gymData) setStreakOptions({
       closedWeekdays: gymData.closed_weekdays || [0, 6],

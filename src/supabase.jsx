@@ -1,9 +1,30 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Fecha de HOY en hora local (no UTC) — para filtros por fecha
+const DEFAULT_GYM_TIMEZONE = import.meta.env.VITE_GYM_TIMEZONE || 'America/Guatemala'
+const GYM_COLUMNS = [
+  'id', 'name', 'logo_url', 'primary_color', 'whatsapp_number', 'address',
+  'created_at', 'closed_weekdays', 'holidays', 'timezone', 'allow_overdue_checkin',
+].join(',')
+const PAGE_SIZE = 500
+
+// Fecha de respaldo en la zona del gimnasio, nunca en la zona del dispositivo.
 const localToday = () => {
-  const d = new Date()
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: DEFAULT_GYM_TIMEZONE,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const value = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${value.year}-${value.month}-${value.day}`
+}
+
+const fetchAllPages = async (buildQuery) => {
+  const rows = []
+  for (let from = 0; ; from += PAGE_SIZE) {
+    const { data, error } = await buildQuery().range(from, from + PAGE_SIZE - 1)
+    if (error) return { data: null, error }
+    rows.push(...(data || []))
+    if (!data || data.length < PAGE_SIZE) return { data: rows, error: null }
+  }
 }
 
 const supabaseUrl      = import.meta.env.VITE_SUPABASE_URL
@@ -91,10 +112,19 @@ export const signOut = () => supabase.auth.signOut()
 
 export const getSession = () => supabase.auth.getSession()
 
+export const requestPasswordReset = (email) =>
+  supabase.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/` })
+
+export const updateCurrentPassword = (password) =>
+  supabase.auth.updateUser({ password })
+
+export const completeInitialPasswordChange = () =>
+  supabase.rpc('complete_initial_password_change')
+
 // ── GIMNASIO (su configuración: logo, color, QR, horarios) ───────────────────────────────
 // Lee el gimnasio del usuario actual (RLS solo deja ver el propio)
 export const getMyGym = async (gymId) => {
-  let query = supabase.from('gyms').select('*')
+  let query = supabase.from('gyms').select(GYM_COLUMNS)
   if (gymId) query = query.eq('id', gymId)
   else query = query.limit(1)
   const { data, error } = await query.single()
@@ -107,7 +137,7 @@ export const updateGym = async (gymId, updates) => {
     .from('gyms')
     .update(updates)
     .eq('id', gymId)
-    .select()
+    .select(GYM_COLUMNS)
     .single()
   return { data, error }
 }
@@ -166,7 +196,7 @@ export const adminUpdateMember = async (memberId, updates = {}) => {
 
 // ── MIEMBROS ───────────────────────────────────────────────
 export const getMembers = async () => {
-  const { data, error } = await supabase
+  return fetchAllPages(() => supabase
     .from('members')
     .select(`
       *,
@@ -174,7 +204,7 @@ export const getMembers = async () => {
       plan:plans(*)
     `)
     .order('created_at', { ascending: false })
-  return { data, error }
+    .order('id', { ascending: false }))
 }
 
 export const getMemberByProfile = async (profileId) => {
@@ -197,47 +227,37 @@ export const updateMember = async (id, updates) => {
   if (Object.prototype.hasOwnProperty.call(safeUpdates, 'plan_id')) {
     safeUpdates.plan_id = safeUpdates.plan_id || null
   }
-  const { data, error } = await supabase
-    .from('members')
-    .update(safeUpdates)
-    .eq('id', id)
-    .select()
-    .single()
-  return { data, error }
+  return adminUpdateMember(id, safeUpdates)
 }
 
-// Desactivar miembro (reversible — solo cambia status)
+// Desactivar miembro: cambia el estado y bloquea la cuenta Auth.
 export const deactivateMember = async (id) => {
-  const { error } = await supabase
-    .from('members')
-    .update({ status: 'inactive' })
-    .eq('id', id)
-  return { error }
+  return invokeAdminUsers({ action: 'deactivate', memberId: id })
 }
 
 // Reactivar miembro
 export const reactivateMember = async (id) => {
-  const { error } = await supabase
-    .from('members')
-    .update({ status: 'active' })
-    .eq('id', id)
-  return { error }
+  return invokeAdminUsers({ action: 'restore', memberId: id })
 }
 
-// Eliminar miembro COMPLETAMENTE (borra de Auth + todas sus tablas)
-// El borrado en Auth pasa por la Edge Function "admin-users"
-export const deleteMemberPermanently = async (memberId, profileId) => {
-  return invokeAdminUsers({ action: 'delete', memberId, profileId })
-}
+// Archivar conserva pagos, asistencia y evidencia financiera; además bloquea Auth.
+export const archiveMember = async (memberId) =>
+  invokeAdminUsers({ action: 'archive', memberId })
+
+// Alias temporal para componentes antiguos: ya no borra datos.
+export const deleteMemberPermanently = async (memberId) => archiveMember(memberId)
 
 // ── PAGOS ──────────────────────────────────────────────────
 export const getPayments = async (memberId = null) => {
-  let query = supabase
-    .from('payments')
-    .select(`*, member:members(*, profile:profiles(*))`)
-    .order('due_date', { ascending: false })
-  if (memberId) query = query.eq('member_id', memberId)
-  const { data, error } = await query
+  const { data, error } = await fetchAllPages(() => {
+    let query = supabase
+      .from('payments')
+      .select(`*, member:members(*, profile:profiles(*))`)
+      .order('due_date', { ascending: false })
+      .order('id', { ascending: false })
+    if (memberId) query = query.eq('member_id', memberId)
+    return query
+  })
   if (error || !data) return { data, error }
   const signed = await signPrivateValues(data.map(p => p.voucher_url), 'vouchers')
   return {
@@ -305,14 +325,26 @@ export const submitMemberPayments = async (dueDates, method, voucherPath) => {
   return { data, error }
 }
 
+export const issueCheckinToken = async (ttlSeconds = 90) => {
+  const { data, error } = await supabase.rpc('issue_checkin_token', {
+    p_ttl_seconds: ttlSeconds,
+  })
+  return { data, error }
+}
+
+export const getGymBusinessDate = async () => {
+  const { data, error } = await supabase.rpc('get_gym_business_date')
+  return { data, error }
+}
+
 // ── MEDIDAS ────────────────────────────────────────────────
 export const getMeasurements = async (memberId) => {
-  const { data, error } = await supabase
+  return fetchAllPages(() => supabase
     .from('measurements')
     .select('*')
     .eq('member_id', memberId)
     .order('measured_at', { ascending: false })
-  return { data, error }
+    .order('id', { ascending: false }))
 }
 
 export const createMeasurement = async (measurement) => {
@@ -336,11 +368,12 @@ export const updateMeasurement = async (id, updates) => {
 
 // ── FOTOS DE PROGRESO ──────────────────────────────────────
 export const getProgressPhotos = async (memberId) => {
-  const { data, error } = await supabase
+  const { data, error } = await fetchAllPages(() => supabase
     .from('progress_photos')
     .select('*')
     .eq('member_id', memberId)
     .order('photo_date', { ascending: false })
+    .order('id', { ascending: false }))
   if (error || !data) return { data, error }
   const signed = await signPrivateValues(data.map(p => p.photo_url), 'progress')
   return {
@@ -379,12 +412,12 @@ export const createProgressPhoto = async (photo) => {
 
 // ── ASISTENCIA ─────────────────────────────────────────────
 export const getAttendance = async (memberId) => {
-  const { data, error } = await supabase
+  return fetchAllPages(() => supabase
     .from('attendance')
     .select('*')
     .eq('member_id', memberId)
     .order('attended_date', { ascending: false })
-  return { data, error }
+    .order('id', { ascending: false }))
 }
 
 export const markAttendance = async (memberId, date) => {
@@ -424,6 +457,15 @@ export const getNotifications = async (profileId) => {
   return { data, error }
 }
 
+export const getAuditEvents = async (limit = 200) => {
+  const { data, error } = await supabase
+    .from('audit_events')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(Math.min(Math.max(Number(limit) || 200, 1), 500))
+  return { data, error }
+}
+
 export const markAllNotificationsRead = async (profileId) => {
   const { error } = await supabase
     .from('notifications')
@@ -449,21 +491,23 @@ export const getPlans = async () => {
 }
 
 export const createPlan = async (plan, gymId) => {
-  const { data, error } = await supabase
-    .from('plans')
-    .insert({ ...plan, gym_id: gymId })
-    .select()
-    .single()
-  return { data, error }
+  void gymId
+  return savePlan(null, plan)
 }
 
 export const updatePlan = async (id, updates) => {
-  const { data, error } = await supabase
-    .from('plans')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single()
+  return savePlan(id, updates)
+}
+
+const savePlan = async (id, plan) => {
+  const { data, error } = await supabase.rpc('save_plan', {
+    p_plan_id: id,
+    p_name: plan.name,
+    p_description: plan.description || null,
+    p_price: Number(plan.price),
+    p_duration_days: Number(plan.duration_days),
+    p_features: plan.features || [],
+  })
   return { data, error }
 }
 
@@ -473,11 +517,12 @@ export const deletePlan = async (id) => {
 }
 // ── ANUNCIOS ───────────────────────────────────────────────
 export const getAnnouncements = async () => {
+  const { data: serverToday } = await getGymBusinessDate()
   const { data, error } = await supabase
     .from('announcements')
     .select('*')
     .eq('visible', true)
-    .or(`expires_at.is.null,expires_at.gte.${localToday()}`)
+    .or(`expires_at.is.null,expires_at.gte.${serverToday || localToday()}`)
     .order('pinned', { ascending: false })
     .order('created_at', { ascending: false })
   return { data, error }

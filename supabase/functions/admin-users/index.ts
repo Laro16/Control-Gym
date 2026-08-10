@@ -1,48 +1,95 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.108.1'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+const configuredOrigins = (Deno.env.get('APP_ORIGINS') || Deno.env.get('APP_ORIGIN') || '')
+  .split(',')
+  .map(value => value.trim().replace(/\/$/, ''))
+  .filter(Boolean)
+
+const corsHeaders = (req: Request) => {
+  const requestOrigin = (req.headers.get('Origin') || '').replace(/\/$/, '')
+  const allowedOrigin = configuredOrigins.includes(requestOrigin)
+    ? requestOrigin
+    : configuredOrigins[0] || requestOrigin || '*'
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Vary': 'Origin',
+  }
 }
 
-const json = (body: unknown, status = 200) =>
+const json = (req: Request, body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    headers: { ...corsHeaders(req), 'Content-Type': 'application/json; charset=utf-8' },
   })
 
 const cleanText = (value: unknown, max = 500) => {
-  const text = String(value ?? '').trim()
-  return text ? text.slice(0, max) : null
+  const valueText = String(value ?? '').trim()
+  return valueText ? valueText.slice(0, max) : null
 }
 
-const validDate = (value: unknown) =>
-  typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+const validDate = (value: unknown) => {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = new Date(`${value}T12:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value
+}
+
+const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
-  if (req.method !== 'POST') return json({ error: 'Metodo no permitido' }, 405)
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders(req) })
+  if (req.method !== 'POST') return json(req, { error: 'Método no permitido' }, 405)
+
+  if (!configuredOrigins.length) {
+    return json(req, { error: 'APP_ORIGINS no está configurado en el servidor' }, 500)
+  }
+
+  const requestOrigin = (req.headers.get('Origin') || '').replace(/\/$/, '')
+  if (configuredOrigins.length && requestOrigin && !configuredOrigins.includes(requestOrigin)) {
+    return json(req, { error: 'Origen no autorizado' }, 403)
+  }
+
+  const contentLength = Number(req.headers.get('Content-Length') || 0)
+  if (contentLength > 32 * 1024) return json(req, { error: 'Solicitud demasiado grande' }, 413)
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')
     const anonKey = Deno.env.get('SUPABASE_ANON_KEY')
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
     if (!supabaseUrl || !anonKey || !serviceKey) {
-      return json({ error: 'Configuracion del servidor incompleta' }, 500)
+      return json(req, { error: 'Configuración del servidor incompleta' }, 500)
     }
 
     const authHeader = req.headers.get('Authorization') ?? ''
     const caller = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: authHeader } },
-      auth: { persistSession: false },
+      auth: { persistSession: false, autoRefreshToken: false },
     })
     const { data: { user: callerUser }, error: authError } = await caller.auth.getUser()
-    if (authError || !callerUser) return json({ error: 'No autenticado' }, 401)
+    if (authError || !callerUser) return json(req, { error: 'No autenticado' }, 401)
 
     const admin = createClient(supabaseUrl, serviceKey, {
       auth: { persistSession: false, autoRefreshToken: false },
     })
+
+    const getBanState = async (userId: string) => {
+      const { data, error } = await admin.auth.admin.getUserById(userId)
+      if (error || !data.user) throw new Error('No se pudo verificar la cuenta de acceso')
+      const bannedUntil = data.user.banned_until ? new Date(data.user.banned_until).getTime() : 0
+      return bannedUntil > Date.now()
+    }
+
+    const setBanState = async (userId: string, banned: boolean) => {
+      const { error } = await admin.auth.admin.updateUserById(userId, {
+        ban_duration: banned ? '876000h' : 'none',
+      })
+      if (error) {
+        throw new Error(banned
+          ? 'No se pudo bloquear la cuenta de acceso'
+          : 'No se pudo reactivar la cuenta de acceso')
+      }
+    }
 
     const { data: callerProfile, error: callerProfileError } = await admin
       .from('profiles')
@@ -51,12 +98,17 @@ Deno.serve(async (req) => {
       .single()
 
     if (callerProfileError || callerProfile?.role !== 'admin' || !callerProfile.gym_id) {
-      return json({ error: 'Solo un administrador puede realizar esta accion' }, 403)
+      return json(req, { error: 'Solo un administrador puede realizar esta acción' }, 403)
     }
     const gymId = callerProfile.gym_id as string
 
+    const { data: secureAdmin, error: secureAdminError } = await caller.rpc('is_admin')
+    if (secureAdminError || secureAdmin !== true) {
+      return json(req, { error: 'Completa la verificación MFA antes de administrar usuarios' }, 403)
+    }
+
     const body = await req.json().catch(() => null)
-    if (!body?.action) return json({ error: 'Falta el campo action' }, 400)
+    if (!body?.action) return json(req, { error: 'Falta el campo action' }, 400)
 
     if (body.action === 'create') {
       const email = cleanText(body.email, 320)?.toLowerCase()
@@ -71,14 +123,14 @@ Deno.serve(async (req) => {
       const notes = cleanText(body.notes, 2000)
       const planId = cleanText(body.planId, 80)
 
-      if (!email || !password || !fullName || !startDate) {
-        return json({ error: 'Nombre, email, contrasena y fecha de inicio son obligatorios' }, 400)
+      if (!email || !validEmail(email) || !password || !fullName || !startDate) {
+        return json(req, { error: 'Nombre, email válido, contraseña y fecha de inicio son obligatorios' }, 400)
       }
-      if (password.length < 8) {
-        return json({ error: 'La contrasena debe tener al menos 8 caracteres' }, 400)
+      if (password.length < 10) {
+        return json(req, { error: 'La contraseña temporal debe tener al menos 10 caracteres' }, 400)
       }
       if (dpi && !/^\d{13}$/.test(dpi)) {
-        return json({ error: 'El DPI debe contener exactamente 13 digitos' }, 400)
+        return json(req, { error: 'El DPI debe contener exactamente 13 dígitos' }, 400)
       }
 
       if (planId) {
@@ -89,112 +141,53 @@ Deno.serve(async (req) => {
           .eq('gym_id', gymId)
           .eq('is_active', true)
           .maybeSingle()
-        if (!plan) return json({ error: 'El plan no pertenece a este gimnasio o esta inactivo' }, 400)
+        if (!plan) return json(req, { error: 'El plan no pertenece a este gimnasio o está inactivo' }, 400)
       }
 
-      let authUserId: string | null = null
-      let createdNow = false
-
+      // Nunca se reutiliza una cuenta existente ni se cambia su contraseña.
+      // La recuperación de acceso siempre pertenece al dueño del email.
       const { data: created, error: createError } = await admin.auth.admin.createUser({
         email,
         password,
         email_confirm: true,
-        user_metadata: { full_name: fullName, role: 'user', gym_id: gymId },
+        user_metadata: { full_name: fullName },
+      })
+      if (createError || !created.user) {
+        const conflict = /already|registered|exists/i.test(createError?.message || '')
+        return json(req, {
+          error: conflict
+            ? 'Este email ya está registrado. Usa recuperación de contraseña o un email diferente.'
+            : createError?.message || 'No se pudo crear la cuenta',
+        }, conflict ? 409 : 400)
+      }
+
+      const authUserId = created.user.id
+      const { data: member, error: provisionError } = await admin.rpc('provision_member_data', {
+        p_actor_id: callerUser.id,
+        p_auth_user_id: authUserId,
+        p_gym_id: gymId,
+        p_email: email,
+        p_full_name: fullName,
+        p_phone: phone,
+        p_dpi: dpi,
+        p_birth_date: birthDate,
+        p_plan_id: planId,
+        p_start_date: startDate,
+        p_emergency_contact: emergencyContact,
+        p_notes: notes,
       })
 
-      if (!createError && created.user) {
-        authUserId = created.user.id
-        createdNow = true
-      } else {
-        const message = (createError?.message || '').toLowerCase()
-        const alreadyExists = message.includes('already') &&
-          (message.includes('registered') || message.includes('exists'))
-        if (!alreadyExists) return json({ error: createError?.message || 'No se pudo crear la cuenta' }, 400)
-
-        // Buscar en todas las paginas; no se limita a los primeros 1000 usuarios.
-        let page = 1
-        while (!authUserId) {
-          const { data: usersPage, error: listError } = await admin.auth.admin.listUsers({ page, perPage: 1000 })
-          if (listError) return json({ error: listError.message }, 400)
-          const existing = usersPage.users.find(u => u.email?.toLowerCase() === email)
-          if (existing) {
-            authUserId = existing.id
-            break
-          }
-          if (usersPage.users.length < 1000) break
-          page += 1
-        }
-        if (!authUserId) return json({ error: 'Este email ya esta registrado' }, 400)
-
-        const { data: existingProfile } = await admin
-          .from('profiles')
-          .select('role, gym_id')
-          .eq('id', authUserId)
-          .maybeSingle()
-        if (existingProfile?.role === 'admin' ||
-            (existingProfile?.gym_id && existingProfile.gym_id !== gymId)) {
-          return json({ error: 'Este email esta en uso por otra cuenta' }, 400)
-        }
-
-        const { data: existingMember } = await admin
-          .from('members')
-          .select('id')
-          .eq('profile_id', authUserId)
-          .maybeSingle()
-        if (existingMember) return json({ error: 'Este usuario ya tiene una ficha de miembro' }, 400)
-
-        const { error: updateAuthError } = await admin.auth.admin.updateUserById(authUserId, {
-          password,
-          email_confirm: true,
-          user_metadata: { full_name: fullName, role: 'user', gym_id: gymId },
-          ban_duration: 'none',
-        })
-        if (updateAuthError) return json({ error: updateAuthError.message }, 400)
+      if (provisionError) {
+        await admin.auth.admin.deleteUser(authUserId)
+        const duplicateDpi = provisionError.code === '23505'
+        return json(req, {
+          error: duplicateDpi
+            ? 'Este DPI ya está asignado a otro miembro.'
+            : 'No se pudo crear la ficha: ' + provisionError.message,
+        }, 400)
       }
 
-      const rollbackNewAuthUser = async () => {
-        if (createdNow && authUserId) await admin.auth.admin.deleteUser(authUserId)
-      }
-
-      const { error: profileError } = await admin.from('profiles').upsert({
-        id: authUserId,
-        email,
-        full_name: fullName,
-        phone,
-        dpi,
-        birth_date: birthDate,
-        role: 'user',
-        gym_id: gymId,
-      })
-      if (profileError) {
-        await rollbackNewAuthUser()
-        if (profileError.code === '23505') {
-          return json({ error: 'Este DPI ya esta asignado a otro miembro del gimnasio' }, 400)
-        }
-        return json({ error: 'No se pudo crear el perfil: ' + profileError.message }, 400)
-      }
-
-      const { data: member, error: memberError } = await admin
-        .from('members')
-        .insert({
-          profile_id: authUserId,
-          plan_id: planId,
-          start_date: startDate,
-          emergency_contact: emergencyContact,
-          notes,
-          gym_id: gymId,
-          status: 'active',
-        })
-        .select('id, profile_id')
-        .single()
-
-      if (memberError) {
-        await admin.from('profiles').delete().eq('id', authUserId)
-        await rollbackNewAuthUser()
-        return json({ error: 'No se pudo crear la ficha: ' + memberError.message }, 400)
-      }
-
-      return json({ user: { id: authUserId, email }, member })
+      return json(req, { user: { id: authUserId, email }, member })
     }
 
     if (body.action === 'update') {
@@ -211,117 +204,96 @@ Deno.serve(async (req) => {
       const status = cleanText(body.status, 30)
 
       if (!memberId || !fullName || !startDate || !status) {
-        return json({ error: 'Faltan datos obligatorios del miembro' }, 400)
+        return json(req, { error: 'Faltan datos obligatorios del miembro' }, 400)
       }
       if (dpi && !/^\d{13}$/.test(dpi)) {
-        return json({ error: 'El DPI debe contener exactamente 13 digitos' }, 400)
+        return json(req, { error: 'El DPI debe contener exactamente 13 dígitos' }, 400)
       }
       if (!['active', 'inactive', 'suspended'].includes(status)) {
-        return json({ error: 'Estado de membresia no valido' }, 400)
+        return json(req, { error: 'Estado de membresía no válido' }, 400)
       }
 
       const { data: target, error: targetError } = await admin
         .from('members')
-        .select('id, profile_id, gym_id')
+        .select('id, profile_id, gym_id, archived_at')
         .eq('id', memberId)
         .eq('gym_id', gymId)
         .maybeSingle()
-
-      if (targetError) return json({ error: targetError.message }, 400)
-      if (!target) return json({ error: 'Miembro no encontrado' }, 404)
-
-      if (planId) {
-        const { data: plan } = await admin
-          .from('plans')
-          .select('id')
-          .eq('id', planId)
-          .eq('gym_id', gymId)
-          .eq('is_active', true)
-          .maybeSingle()
-        if (!plan) return json({ error: 'El plan no pertenece a este gimnasio o esta inactivo' }, 400)
+      if (targetError || !target || target.archived_at) {
+        return json(req, { error: 'Miembro no encontrado o archivado' }, 404)
       }
 
-      const { error: profileError } = await admin
-        .from('profiles')
-        .update({
-          full_name: fullName,
-          phone,
-          dpi,
-          birth_date: birthDate,
-        })
-        .eq('id', target.profile_id)
-        .eq('gym_id', gymId)
+      const previousBanState = await getBanState(target.profile_id)
+      const desiredBanState = status !== 'active'
+      const authStateChanged = previousBanState !== desiredBanState
+      if (authStateChanged) await setBanState(target.profile_id, desiredBanState)
 
-      if (profileError) {
-        if (profileError.code === '23505') {
-          return json({ error: 'Este DPI ya esta asignado a otro miembro del gimnasio' }, 400)
+      const { data, error } = await caller.rpc('admin_update_member_data', {
+        p_member_id: memberId,
+        p_full_name: fullName,
+        p_phone: phone,
+        p_dpi: dpi,
+        p_birth_date: birthDate,
+        p_status: status,
+        p_plan_id: planId,
+        p_start_date: startDate,
+        p_emergency_contact: emergencyContact,
+        p_notes: notes,
+      })
+      if (error) {
+        if (authStateChanged) {
+          try { await setBanState(target.profile_id, previousBanState) } catch { /* se conserva el error principal */ }
         }
-        return json({ error: 'No se pudieron actualizar los datos personales: ' + profileError.message }, 400)
+        return json(req, {
+          error: error.code === '23505' ? 'Este DPI ya está asignado a otro miembro.' : error.message,
+        }, 400)
       }
-
-      const { error: memberError } = await admin
-        .from('members')
-        .update({
-          status,
-          plan_id: planId,
-          start_date: startDate,
-          emergency_contact: emergencyContact,
-          notes,
-        })
-        .eq('id', memberId)
-        .eq('gym_id', gymId)
-
-      if (memberError) {
-        return json({ error: 'No se pudo actualizar la membresia: ' + memberError.message }, 400)
-      }
-
-      return json({ ok: true, memberId, profileId: target.profile_id })
+      return json(req, { ok: true, member: data })
     }
 
-    if (body.action === 'delete') {
+    if (['deactivate', 'archive', 'restore'].includes(body.action)) {
       const memberId = cleanText(body.memberId, 80)
-      const profileId = cleanText(body.profileId, 80)
-      if (!memberId || !profileId) return json({ error: 'Faltan memberId y profileId' }, 400)
+      if (!memberId) return json(req, { error: 'Falta memberId' }, 400)
 
       const { data: target } = await admin
         .from('members')
-        .select('id, profile_id, gym_id, profile:profiles(role)')
+        .select('id, profile_id, gym_id, archived_at, profile:profiles(role)')
         .eq('id', memberId)
-        .eq('profile_id', profileId)
+        .eq('gym_id', gymId)
         .maybeSingle()
-
-      if (!target || target.gym_id !== gymId) return json({ error: 'Miembro no encontrado' }, 404)
+      if (!target) return json(req, { error: 'Miembro no encontrado' }, 404)
       const targetProfile = Array.isArray(target.profile) ? target.profile[0] : target.profile
-      if (targetProfile?.role === 'admin') return json({ error: 'No se puede eliminar a un administrador' }, 403)
+      if (targetProfile?.role === 'admin') return json(req, { error: 'No se puede modificar a un administrador' }, 403)
 
-      // Eliminar primero los archivos privados y el avatar. Los nombres viven
-      // directamente dentro de la carpeta memberId/profileId.
-      for (const [bucket, folder] of [['vouchers', memberId], ['progress', memberId], ['avatars', profileId]]) {
-        const { data: files, error: listError } = await admin.storage.from(bucket).list(folder, { limit: 1000 })
-        if (listError) return json({ error: `No se pudieron revisar los archivos de ${bucket}` }, 400)
-        const paths = (files || []).filter(f => f.name).map(f => `${folder}/${f.name}`)
-        if (paths.length) {
-          const { error: removeError } = await admin.storage.from(bucket).remove(paths)
-          if (removeError) return json({ error: `No se pudieron eliminar los archivos de ${bucket}` }, 400)
+      const rpcName = body.action === 'archive'
+        ? 'archive_member'
+        : body.action === 'restore' ? 'restore_member' : 'deactivate_member'
+
+      const previousBanState = await getBanState(target.profile_id)
+      const desiredBanState = body.action !== 'restore'
+      const authStateChanged = previousBanState !== desiredBanState
+      if (authStateChanged) await setBanState(target.profile_id, desiredBanState)
+
+      const { error: stateError } = await caller.rpc(rpcName, { p_member_id: memberId })
+      if (stateError) {
+        if (authStateChanged) {
+          try { await setBanState(target.profile_id, previousBanState) } catch { /* se conserva el error principal */ }
         }
+        return json(req, { error: stateError.message }, 400)
       }
 
-      const { error: dataError } = await admin.rpc('delete_member_data', {
-        p_member_id: memberId,
-        p_profile_id: profileId,
-      })
-      if (dataError) return json({ error: 'No se pudieron eliminar los datos: ' + dataError.message }, 400)
-
-      const { error: authDeleteError } = await admin.auth.admin.deleteUser(profileId)
-      if (authDeleteError) {
-        return json({ error: 'Los datos se eliminaron, pero la cuenta de acceso requiere limpieza manual' }, 500)
-      }
-      return json({ ok: true })
+      return json(req, { ok: true })
     }
 
-    return json({ error: `Accion desconocida: ${body.action}` }, 400)
+    if (body.action === 'delete') {
+      return json(req, {
+        error: 'El borrado permanente está deshabilitado. Archiva al miembro para conservar el historial financiero.',
+      }, 410)
+    }
+
+    return json(req, { error: `Acción desconocida: ${body.action}` }, 400)
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Error inesperado'
-    return json({ error: message }, 500)
+    return json(req, { error: message }, 500)
   }
 })

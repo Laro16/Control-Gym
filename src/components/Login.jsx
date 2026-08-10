@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { signIn } from '../supabase'
+import { requestPasswordReset, signIn } from '../supabase'
 import { Dumbbell, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function Login({ notice = '' }) {
@@ -8,14 +8,24 @@ export default function Login({ notice = '' }) {
   const [showPass, setShowPass] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState('')
+  const [resetMode, setResetMode] = useState(false)
+  const [sent, setSent] = useState(false)
 
   const gymName = import.meta.env.VITE_GYM_NAME || 'GymApp'
 
   const handleSubmit = async (e) => {
     e.preventDefault()
-    if (!email || !password) { setError('Completa todos los campos'); return }
+    if (!email || (!resetMode && !password)) { setError('Completa todos los campos'); return }
     setLoading(true)
     setError('')
+
+    if (resetMode) {
+      const { error: resetError } = await requestPasswordReset(email.trim().toLowerCase())
+      setLoading(false)
+      if (resetError) setError(resetError.message || 'No se pudo enviar el enlace')
+      else setSent(true)
+      return
+    }
 
     const { error: err } = await signIn(email, password)
 
@@ -49,7 +59,12 @@ export default function Login({ notice = '' }) {
 
         {/* Form */}
         <div className="card">
-          <h2 className="text-lg font-semibold text-white mb-5">Iniciar sesión</h2>
+          <h2 className="text-lg font-semibold text-white mb-2">
+            {resetMode ? 'Recuperar contraseña' : 'Iniciar sesión'}
+          </h2>
+          {resetMode && (
+            <p className="text-sm text-gray-500 mb-5">Te enviaremos un enlace seguro para definir una contraseña nueva.</p>
+          )}
 
           {notice && (
             <div className="text-sm text-brand-300 bg-brand-500/10 border border-brand-500/20 rounded-xl px-3 py-2.5 mb-4">
@@ -70,7 +85,13 @@ export default function Login({ notice = '' }) {
               />
             </div>
 
-            <div>
+            {sent && (
+              <div className="text-sm text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-xl px-3 py-2.5">
+                Si el correo existe, recibirás el enlace de recuperación. Revisa también spam.
+              </div>
+            )}
+
+            {!resetMode && <div>
               <label className="label">Contraseña</label>
               <div className="relative">
                 <input
@@ -90,7 +111,7 @@ export default function Login({ notice = '' }) {
                   {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
-            </div>
+            </div>}
 
             {error && (
               <div className="flex items-center gap-2 text-red-400 text-sm bg-red-500/10 border border-red-500/20 rounded-xl px-3 py-2.5">
@@ -109,7 +130,14 @@ export default function Login({ notice = '' }) {
                   <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   Entrando...
                 </span>
-              ) : 'Entrar'}
+              ) : resetMode ? 'Enviar enlace' : 'Entrar'}
+            </button>
+            <button
+              type="button"
+              className="btn-ghost w-full text-sm"
+              onClick={() => { setResetMode(value => !value); setError(''); setSent(false) }}
+            >
+              {resetMode ? 'Volver al inicio de sesión' : 'Olvidé mi contraseña'}
             </button>
           </form>
         </div>

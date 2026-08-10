@@ -1,5 +1,14 @@
 import { getBrandHex } from './theme.js'
 
+let gymTimeZone = import.meta.env?.VITE_GYM_TIMEZONE || 'America/Guatemala'
+
+export const setGymTimeZone = (value) => {
+  try {
+    new Intl.DateTimeFormat('en-CA', { timeZone: value }).format(new Date())
+    gymTimeZone = value
+  } catch { /* conservar la zona válida anterior */ }
+}
+
 // ── FECHAS ─────────────────────────────────────────────────
 // IMPORTANTE: todas las fechas se manejan en hora LOCAL (Guatemala),
 // nunca en UTC. Antes se usaba toISOString(), que devuelve UTC:
@@ -40,7 +49,14 @@ export const formatDateShort = (date) => {
   })
 }
 
-export const today = () => toLocalDateStr(new Date())
+export const today = () => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: gymTimeZone,
+    year: 'numeric', month: '2-digit', day: '2-digit',
+  }).formatToParts(new Date())
+  const value = Object.fromEntries(parts.map(part => [part.type, part.value]))
+  return `${value.year}-${value.month}-${value.day}`
+}
 
 export const addDays = (date, days) => {
   const d = parseDateStr(date)

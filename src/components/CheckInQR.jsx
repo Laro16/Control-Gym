@@ -1,31 +1,72 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { QRCodeCanvas } from 'qrcode.react'
-import { QrCode, Printer, Download, RefreshCw, Check, Copy, AlertCircle, MonitorSmartphone } from 'lucide-react'
-import { getMyGym, updateGym } from '../supabase'
+import { QrCode, RefreshCw, AlertCircle, MonitorSmartphone, ShieldCheck, Clock } from 'lucide-react'
+import { getMyGym, issueCheckinToken } from '../supabase'
 import { Spinner, toast } from './shared'
 
-function randomCode() {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789'
-  const bytes = crypto.getRandomValues(new Uint8Array(16))
-  return Array.from(bytes, byte => alphabet[byte % alphabet.length]).join('')
-}
-
-const escapeHtml = value => String(value || '').replace(/[&<>"']/g, character => ({
-  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-})[character])
+const TOKEN_TTL_SECONDS = 90
+const REFRESH_EVERY_MS = 60_000
 
 export function CheckInQR({ profile }) {
-  const [gym, setGym]         = useState(null)
+  const [gym, setGym] = useState(null)
+  const [token, setToken] = useState('')
+  const [expiresAt, setExpiresAt] = useState(null)
+  const [secondsLeft, setSecondsLeft] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [busy, setBusy]       = useState(false)
-  const [copied, setCopied]   = useState(false)
-  const [confirmRegen, setConfirmRegen] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [kiosk, setKiosk] = useState(false)
-  const qrRef = useRef(null)
+
+  const refreshToken = useCallback(async (quiet = false) => {
+    if (!quiet) setRefreshing(true)
+    const { data, error } = await issueCheckinToken(TOKEN_TTL_SECONDS)
+    if (error || !data?.token) {
+      setToken('')
+      setExpiresAt(null)
+      toast.error(error?.message || 'No se pudo emitir el código temporal')
+    } else {
+      setToken(data.token)
+      setExpiresAt(data.expires_at)
+    }
+    if (!quiet) setRefreshing(false)
+  }, [])
+
+  useEffect(() => {
+    let cancelled = false
+    const load = async () => {
+      const { data, error } = await getMyGym(profile.gym_id)
+      if (cancelled) return
+      setGym(data || null)
+      setLoading(false)
+      if (error) toast.error(error.message || 'No se pudo cargar el gimnasio')
+      if (data) await refreshToken(true)
+    }
+    load()
+    return () => { cancelled = true }
+  }, [profile.gym_id, refreshToken])
+
+  useEffect(() => {
+    if (!gym) return undefined
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') refreshToken(true)
+    }, REFRESH_EVERY_MS)
+    return () => window.clearInterval(timer)
+  }, [gym, refreshToken])
+
+  useEffect(() => {
+    const update = () => {
+      const remaining = expiresAt
+        ? Math.max(0, Math.ceil((new Date(expiresAt).getTime() - Date.now()) / 1000))
+        : 0
+      setSecondsLeft(remaining)
+      if (remaining === 0 && expiresAt) setToken('')
+    }
+    update()
+    const timer = window.setInterval(update, 1000)
+    return () => window.clearInterval(timer)
+  }, [expiresAt])
 
   const enterKiosk = () => {
     setKiosk(true)
-    // Pantalla completa real si el dispositivo lo permite (tablet en recepción)
     document.documentElement.requestFullscreen?.().catch(() => {})
   }
 
@@ -33,16 +74,6 @@ export function CheckInQR({ profile }) {
     setKiosk(false)
     if (document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
   }
-
-  const load = useCallback(async () => {
-    setLoading(true)
-    const { data, error } = await getMyGym(profile.gym_id)
-    setGym(data || null)
-    setLoading(false)
-    if (error) toast.error(error.message || 'No se pudo cargar el gimnasio')
-  }, [profile.gym_id])
-
-  useEffect(() => { load() }, [load])
 
   if (loading) return <Spinner />
   if (!gym) return (
@@ -52,188 +83,78 @@ export function CheckInQR({ profile }) {
     </div>
   )
 
-  const checkinUrl = `${window.location.origin}/#checkin/${gym.checkin_code}`
-
-  const getCanvas = () => qrRef.current?.querySelector('canvas')
-
-  const handleDownload = () => {
-    const canvas = getCanvas()
-    if (!canvas) return
-    const a = document.createElement('a')
-    a.href = canvas.toDataURL('image/png')
-    a.download = `check-in-${gym.name.replace(/\s+/g, '-').toLowerCase()}.png`
-    a.click()
-  }
-
-  const handlePrint = () => {
-    const canvas = getCanvas()
-    if (!canvas) return
-    const dataUrl = canvas.toDataURL('image/png')
-    const w = window.open('', '_blank', 'width=600,height=800')
-    if (!w) { toast.info('Permite las ventanas emergentes para imprimir'); return }
-    const safeGymName = escapeHtml(gym.name)
-    w.document.write(`
-      <html><head><title>Check-in ${safeGymName}</title>
-      <style>
-        body{font-family:system-ui,sans-serif;text-align:center;padding:48px 24px;color:#111}
-        h1{font-size:28px;margin:0 0 4px}
-        p{color:#555;margin:0 0 32px;font-size:16px}
-        img{width:340px;height:340px}
-        .foot{margin-top:28px;font-size:15px;color:#333}
-      </style></head>
-      <body>
-        <h1>${safeGymName}</h1>
-        <p>Escanea para registrar tu asistencia</p>
-        <img src="${dataUrl}" />
-        <p class="foot">Apunta la cámara de tu teléfono al código</p>
-        <script>window.onload=()=>{window.print()}</script>
-      </body></html>
-    `)
-    w.document.close()
-  }
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(checkinUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch { toast.info('No se pudo copiar el enlace') }
-  }
-
-  const handleRegenerate = async () => {
-    setBusy(true)
-    const newCode = randomCode()
-    try {
-      const { data, error } = await updateGym(profile.gym_id, { checkin_code: newCode })
-      if (error) throw error
-      if (data) setGym(data)
-      setConfirmRegen(false)
-      toast.success('Código de check-in regenerado')
-    } catch (error) {
-      toast.error(error.message || 'No se pudo regenerar el código')
-    } finally {
-      setBusy(false)
-    }
-  }
+  const checkinUrl = token ? `${window.location.origin}/#checkin/${token}` : ''
+  const qr = checkinUrl ? (
+    <QRCodeCanvas value={checkinUrl} size={260} level="H" includeMargin={false} />
+  ) : (
+    <div className="w-[260px] h-[260px] flex items-center justify-center text-gray-500 text-sm px-8">
+      Código vencido. Presiona actualizar.
+    </div>
+  )
 
   return (
     <div className="space-y-5 animate-fade-in max-w-xl">
       <div>
         <h2 className="section-title flex items-center gap-2">
           <QrCode className="w-5 h-5 text-brand-500" />
-          Código de check-in
+          Check-in seguro
         </h2>
         <p className="text-gray-500 text-sm mt-1">
-          Imprime este QR y pégalo en la entrada. Tus miembros lo escanean para registrar su asistencia.
+          El QR cambia automáticamente y solo funciona durante unos segundos. Muéstralo en una tablet o monitor de recepción.
         </p>
       </div>
 
       <div className="card flex flex-col items-center text-center">
-        <div className="relative">
-          <span
-            className="absolute -inset-3 rounded-3xl bg-brand-500/15 animate-ping pointer-events-none"
-            style={{ animationDuration: '3s' }}
-          />
-          <span className="absolute -inset-3 rounded-3xl border border-brand-500/25 pointer-events-none" />
-          <div ref={qrRef} className="relative bg-white p-4 rounded-2xl">
-            <QRCodeCanvas value={checkinUrl} size={220} level="H" includeMargin={false} />
-            {gym.logo_url && (
-              <img
-                src={gym.logo_url}
-                alt=""
-                className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-11 rounded-xl object-cover ring-4 ring-white shadow"
-              />
-            )}
-          </div>
+        <div className="relative bg-white p-5 rounded-2xl">
+          {qr}
+          {gym.logo_url && checkinUrl && (
+            <img
+              src={gym.logo_url}
+              alt=""
+              className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-xl object-cover ring-4 ring-white shadow"
+            />
+          )}
         </div>
         <p className="font-semibold text-white mt-4">{gym.name}</p>
-        <p className="text-xs text-gray-500">Escanea para registrar tu asistencia</p>
+        <p className={`text-xs mt-1 flex items-center gap-1.5 ${secondsLeft <= 15 ? 'text-yellow-400' : 'text-emerald-400'}`}>
+          <Clock className="w-3.5 h-3.5" />
+          {secondsLeft > 0 ? `Válido por ${secondsLeft} s` : 'Código vencido'}
+        </p>
 
         <div className="flex flex-wrap gap-2 justify-center mt-5 w-full">
-          <button className="btn-primary flex-1 min-w-[140px]" onClick={handlePrint}>
-            <Printer className="w-4 h-4" /> Imprimir
+          <button className="btn-secondary flex-1 min-w-[140px]" onClick={() => refreshToken()} disabled={refreshing}>
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            Actualizar
           </button>
-          <button className="btn-secondary flex-1 min-w-[140px]" onClick={handleDownload}>
-            <Download className="w-4 h-4" /> Descargar PNG
-          </button>
-          <button className="btn-secondary flex-1 min-w-[140px]" onClick={enterKiosk}>
+          <button className="btn-primary flex-1 min-w-[180px]" onClick={enterKiosk}>
             <MonitorSmartphone className="w-4 h-4" /> Pantalla de recepción
           </button>
         </div>
-        <p className="text-[11px] text-gray-600 mt-2">
-          💡 ¿Tienes una tablet en recepción? Usa "Pantalla de recepción" y déjala fija mostrando el QR.
+      </div>
+
+      <div className="rounded-2xl bg-emerald-500/10 border border-emerald-500/20 p-4 flex gap-3">
+        <ShieldCheck className="w-5 h-5 text-emerald-400 flex-shrink-0" />
+        <p className="text-sm text-emerald-100/80">
+          El enlace no se guarda en la ficha del gimnasio y deja de funcionar al vencer. Ya no existe un QR permanente para compartir fuera del local.
         </p>
       </div>
 
-      <div className="card space-y-3">
-        <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wide">Enlace del check-in</p>
-        <div className="flex items-center gap-2">
-          <code className="flex-1 text-xs text-gray-300 bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2 truncate">
-            {checkinUrl}
-          </code>
-          <button className="btn-ghost p-2 rounded-lg" onClick={handleCopy} title="Copiar enlace">
-            {copied ? <Check className="w-4 h-4 text-emerald-400" /> : <Copy className="w-4 h-4" />}
-          </button>
-        </div>
-
-        {confirmRegen ? (
-          <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 space-y-3">
-            <p className="text-yellow-400/90 text-sm flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-              Al regenerar, el QR anterior dejará de funcionar. Tendrás que imprimir y pegar el nuevo.
-            </p>
-            <div className="flex gap-2">
-              <button className="btn-secondary flex-1" onClick={() => setConfirmRegen(false)} disabled={busy}>
-                Cancelar
-              </button>
-              <button className="btn-danger flex-1" onClick={handleRegenerate} disabled={busy}>
-                {busy ? 'Regenerando...' : 'Sí, regenerar'}
-              </button>
-            </div>
-          </div>
-        ) : (
-          <button className="btn-secondary w-full" onClick={() => setConfirmRegen(true)}>
-            <RefreshCw className="w-4 h-4" /> Regenerar código
-          </button>
-        )}
-      </div>
-
-      {/* ── MODO PANTALLA DE RECEPCIÓN (kiosko) ────────── */}
       {kiosk && (
         <div
           className="fixed inset-0 z-[95] bg-gray-950 flex flex-col items-center justify-center gap-7 animate-fade-in cursor-pointer select-none"
           onClick={exitKiosk}
         >
-          {gym.logo_url && (
-            <img src={gym.logo_url} alt="" className="w-20 h-20 rounded-2xl object-cover shadow-lg" />
-          )}
+          {gym.logo_url && <img src={gym.logo_url} alt="" className="w-20 h-20 rounded-2xl object-cover shadow-lg" />}
           <h1 className="font-display text-4xl sm:text-6xl tracking-wider text-white text-center px-6 leading-none">
             {gym.name}
           </h1>
-
-          <div className="relative my-2">
-            <span
-              className="absolute -inset-5 rounded-[2.5rem] bg-brand-500/20 animate-ping pointer-events-none"
-              style={{ animationDuration: '2.8s' }}
-            />
-            <span className="absolute -inset-5 rounded-[2.5rem] border-2 border-brand-500/30 pointer-events-none" />
-            <div className="relative bg-white p-6 rounded-[2rem] shadow-2xl">
-              <QRCodeCanvas value={checkinUrl} size={300} level="H" includeMargin={false} />
-              {gym.logo_url && (
-                <img
-                  src={gym.logo_url}
-                  alt=""
-                  className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-xl object-cover ring-4 ring-white shadow"
-                />
-              )}
-            </div>
-          </div>
-
+          <div className="relative bg-white p-7 rounded-[2rem] shadow-2xl">{qr}</div>
           <p className="text-brand-400 font-bold text-xl sm:text-2xl text-center px-6">
             Escanea para marcar tu asistencia
           </p>
-          <p className="text-gray-600 text-sm">y mantén tu racha encendida 🔥</p>
-
+          <p className={`text-sm ${secondsLeft <= 15 ? 'text-yellow-400' : 'text-gray-500'}`}>
+            El código se renueva automáticamente · {secondsLeft} s
+          </p>
           <p className="text-gray-700 text-xs absolute bottom-5">Toca la pantalla para salir</p>
         </div>
       )}

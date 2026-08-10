@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { supabase, signOut } from './supabase'
 import Login from './components/Login'
 import { Toaster, PageSkeleton } from './components/shared'
+import { AdminMfaGate, ForcePasswordChange, RecoveryPasswordGate } from './components/SecurityGates'
 
 // ── CODE SPLITTING ─────────────────────────────────────────
 // Cada rol descarga solo su parte: los miembros nunca bajan el
@@ -73,6 +74,7 @@ export default function App() {
     return localStorage.getItem('gymapp-theme') !== 'light'
   })
   const [checkinCode, setCheckinCode] = useState(parseCheckin)
+  const [recovery, setRecovery] = useState(false)
   const profileRef = useRef(null)
   const initDone   = useRef(false)
 
@@ -100,6 +102,14 @@ export default function App() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        if (event === 'PASSWORD_RECOVERY') {
+          setRecovery(true)
+          if (session?.user && !profileRef.current) {
+            const data = await fetchProfile(session.user.id)
+            if (data) { profileRef.current = data; setProfile(data); setStatus('ready') }
+          }
+          return
+        }
         if (!initDone.current) return
         if (event === 'SIGNED_OUT' || !session) {
           profileRef.current = null; setProfile(null); setStatus('login'); return
@@ -116,8 +126,14 @@ export default function App() {
   }, [])
 
   const handleLogout = async () => {
-    profileRef.current = null; setProfile(null); setStatus('login')
+    profileRef.current = null; setProfile(null); setRecovery(false); setStatus('login')
     await signOut()
+  }
+
+  const handlePasswordChanged = () => {
+    const next = profile ? { ...profile, must_change_password: false } : profile
+    profileRef.current = next
+    setProfile(next)
   }
 
   if (status === 'loading') {
@@ -129,6 +145,14 @@ export default function App() {
         </div>
       </div>
     )
+  }
+
+  if (recovery) {
+    return <RecoveryPasswordGate onComplete={() => setRecovery(false)} onLogout={handleLogout} />
+  }
+
+  if (status === 'ready' && profile?.must_change_password) {
+    return <ForcePasswordChange onComplete={handlePasswordChanged} onLogout={handleLogout} />
   }
 
   // Check-in por QR: una vez resuelta la sesión, tiene prioridad.
@@ -164,9 +188,11 @@ export default function App() {
     const props = { profile, onLogout: handleLogout, darkMode, onToggleDark: () => setDarkMode(d => !d) }
     if (profile.role === 'admin') {
       return (
-        <Suspense fallback={<LazyFallback />}>
-          <AdminDashboard {...props} /><Toaster />
-        </Suspense>
+        <AdminMfaGate onLogout={handleLogout}>
+          <Suspense fallback={<LazyFallback />}>
+            <AdminDashboard {...props} /><Toaster />
+          </Suspense>
+        </AdminMfaGate>
       )
     }
     return (
