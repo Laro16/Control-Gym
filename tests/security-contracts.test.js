@@ -90,3 +90,11 @@ test('las consultas members-profiles especifican la relación del propietario', 
   assert.match(frontend, /profile:profiles!members_profile_id_fkey\(\*\)/)
   assert.match(edge, /profile:profiles!members_profile_id_fkey\(role\)/)
 })
+
+test('los beneficios de planes se editan y muestran como elementos separados', () => {
+  const plans = read('src/components/AdminPlans.jsx')
+  assert.match(plans, /features: \(plan\.features \|\| \[\]\)\.join\('\\n'\)/)
+  assert.match(plans, /form\.features\.split\(\/\\r\?\\n\/\)/)
+  assert.match(plans, /Escribe un beneficio por línea/)
+  assert.match(plans, /items-start gap-2\.5 rounded-xl/)
+})
