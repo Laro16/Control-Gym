@@ -7,7 +7,7 @@ Cada repositorio/proyecto Supabase admite **un solo gimnasio**. El índice `sing
 ## Controles incluidos
 
 - RLS y archivos privados.
-- Administradores obligados a usar MFA/TOTP.
+- Administración restringida a sesión válida, rol `admin` y gimnasio asignado.
 - Contraseña temporal con cambio obligatorio para miembros nuevos.
 - Recuperación de contraseña por email.
 - Alta y edición transaccional de perfil + membresía.
@@ -34,16 +34,23 @@ Antes ejecuta `supabase/preflight_existing.sql` y crea un backup. La migración 
 
 ## Instalación nueva
 
-Ejecuta en este orden:
+Para un proyecto vacío, ejecuta una sola vez:
+
+```text
+supabase/INSTALACION_LIMPIA_CONTROL_GYM.sql
+```
+
+Ese archivo reúne, en el orden correcto, las siguientes migraciones:
 
 1. `supabase/migrations/20260801_initial_schema.sql`
 2. `supabase/migrations/20260802_security_integrity.sql`
 3. `supabase/migrations/20260804_financial_integrity.sql`
 4. `supabase/migrations/20260808_single_gym_hardening.sql`
-5. Crea el usuario administrador en Authentication.
-6. Edita y ejecuta `supabase/bootstrap_single_gym.sql`.
-7. Ejecuta `supabase/verification_queries.sql`.
-8. Despliega `supabase/functions/admin-users/index.ts` con JWT activo.
+5. `supabase/migrations/20260810_remove_admin_mfa.sql`
+6. Crea el usuario administrador en Authentication.
+7. Edita y ejecuta `supabase/bootstrap_single_gym.sql`.
+8. Ejecuta `supabase/verification_queries.sql`.
+9. Despliega `supabase/functions/admin-users/index.ts` con la verificación JWT integrada desactivada; la función valida la sesión internamente.
 
 ## Variables del frontend
 
@@ -52,7 +59,7 @@ Copia `.env.example` como `.env.local` para desarrollo. En Vercel configura:
 ```env
 VITE_SUPABASE_URL=https://TU-PROYECTO.supabase.co
 VITE_SUPABASE_ANON_KEY=TU_CLAVE_ANON_PUBLICA
-VITE_GYM_NAME=Mi Gimnasio
+VITE_GYM_NAME=Control Gym
 VITE_GYM_WHATSAPP=50212345678
 VITE_GYM_TIMEZONE=America/Guatemala
 ```
@@ -73,7 +80,6 @@ En Supabase Authentication:
 
 - desactiva registro público;
 - usa contraseña mínima de 10 caracteres;
-- habilita TOTP;
 - configura Site URL y Redirect URLs de Vercel;
 - configura SMTP para recuperación de contraseña.
 

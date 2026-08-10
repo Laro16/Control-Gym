@@ -14,9 +14,10 @@ Ejecuta completo:
 
 ```text
 supabase/migrations/20260808_single_gym_hardening.sql
+supabase/migrations/20260810_remove_admin_mfa.sql
 ```
 
-La migración no borra miembros, pagos ni archivos. Crea bitácora, MFA administrativo, tokens temporales de check-in, archivado y límites de Storage.
+Las migraciones no borran miembros, pagos ni archivos. Crean bitácora, tokens temporales de check-in, archivado, límites de Storage y autorización administrativa por sesión y rol.
 
 Si el SQL muestra un `NOTICE` indicando que no pudo configurar `pg_cron`, habilita la extensión en Database > Extensions, vuelve a ejecutar la migración y confirma el job con:
 
@@ -28,7 +29,7 @@ where jobname = 'control-gym-payment-notifications';
 
 ## 3. Edge Function
 
-Despliega `supabase/functions/admin-users/index.ts` con nombre exacto `admin-users` y verificación JWT activa.
+Despliega `supabase/functions/admin-users/index.ts` con nombre exacto `admin-users` y la verificación JWT integrada desactivada. La función valida internamente la sesión, el rol y el gimnasio.
 
 Configura el secreto, sustituyendo tu dominio:
 
@@ -45,7 +46,7 @@ En Authentication > URL Configuration:
 - Site URL: tu dominio de producción.
 - Redirect URLs: producción y previews necesarios.
 
-En Authentication activa TOTP, desactiva signup público, fija mínimo 10 caracteres y configura SMTP. En el siguiente acceso cada administrador deberá enrolar su autenticador.
+En Authentication desactiva signup público, fija mínimo 10 caracteres y configura SMTP para recuperación de contraseña.
 
 ## 5. Vercel
 
@@ -55,7 +56,7 @@ Configura las variables descritas en README y despliega el repositorio completo.
 
 Ejecuta `supabase/verification_queries.sql` y realiza estas pruebas con datos de prueba:
 
-1. Admin inicia sesión, enrola MFA y abre el panel.
+1. Admin inicia sesión con correo y contraseña y abre el panel directamente.
 2. Crea un miembro; al primer login se exige cambiar la contraseña temporal.
 3. Usa “Olvidé mi contraseña” y confirma el enlace SMTP.
 4. Abre Check-in: el QR debe mostrar cuenta regresiva y renovarse.
