@@ -96,5 +96,6 @@ test('los beneficios de planes se editan y muestran como elementos separados', (
   assert.match(plans, /features: \(plan\.features \|\| \[\]\)\.join\('\\n'\)/)
   assert.match(plans, /form\.features\.split\(\/\\r\?\\n\/\)/)
   assert.match(plans, /Escribe un beneficio por línea/)
-  assert.match(plans, /items-start gap-2\.5 rounded-xl/)
+  assert.match(plans, /divide-y divide-gray-800\/70/)
+  assert.match(plans, /items-start gap-2 py-1\.5/)
 })
