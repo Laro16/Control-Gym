@@ -115,16 +115,16 @@ export function AdminPlans({ plans, members, gymId, onRefresh }) {
               <p className="text-xs text-gray-400 mt-1">{assignedTo(p.id)} miembro{assignedTo(p.id) === 1 ? '' : 's'} asignado{assignedTo(p.id) === 1 ? '' : 's'}</p>
             )}
             {p.description && (
-              <p className="text-sm leading-relaxed text-gray-300 mt-4 border-l-2 border-brand-500/50 pl-3">
+              <p className="text-xs leading-5 text-gray-300 mt-3 border-l-2 border-brand-500/50 pl-2.5">
                 {p.description}
               </p>
             )}
             {p.features?.length > 0 && (
-              <ul className="mt-4 space-y-2.5 border-t border-gray-800 pt-4">
+              <ul className="mt-3 border-t border-gray-800 pt-2.5 divide-y divide-gray-800/70">
                 {p.features.map((f, i) => (
-                  <li key={i} className="text-sm leading-relaxed text-gray-300 flex items-start gap-2.5 rounded-xl border border-gray-800/80 bg-gray-950/30 px-3 py-2.5">
-                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                  <li key={i} className="text-xs leading-5 text-gray-300 flex items-start gap-2 py-1.5">
+                    <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
+                      <Check className="w-2.5 h-2.5 text-emerald-400" />
                     </span>
                     <span>{f}</span>
                   </li>
