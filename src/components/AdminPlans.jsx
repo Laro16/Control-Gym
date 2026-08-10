@@ -17,7 +17,7 @@ export function AdminPlans({ plans, members, gymId, onRefresh }) {
     setForm({
       name: plan.name, description: plan.description || '',
       price: plan.price, duration_days: plan.duration_days,
-      features: (plan.features || []).join(', ')
+      features: (plan.features || []).join('\n')
     })
     setShowForm(true)
   }
@@ -37,7 +37,11 @@ export function AdminPlans({ plans, members, gymId, onRefresh }) {
     const payload = {
       name: form.name.trim(), description: form.description.trim() || null,
       price, duration_days: duration,
-      features: form.features ? form.features.split(',').map(f => f.trim()).filter(Boolean) : []
+      features: form.features
+        ? (form.features.includes('\n') ? form.features.split(/\r?\n/) : form.features.split(','))
+          .map(feature => feature.trim())
+          .filter(Boolean)
+        : []
     }
     try {
       const { error } = editing
@@ -93,25 +97,36 @@ export function AdminPlans({ plans, members, gymId, onRefresh }) {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {plans.map(p => (
-          <div key={p.id} className="card-hover">
-            <div className="flex items-start justify-between mb-2">
+          <div key={p.id} className="card-hover flex flex-col">
+            <div className="flex items-start justify-between gap-3 mb-3">
               <h3 className="font-semibold text-white">{p.name}</h3>
               <div className="flex gap-1">
                 <button className="btn-ghost p-1.5" onClick={() => openEdit(p)}><Edit2 className="w-3.5 h-3.5" /></button>
                 <button className="btn-danger p-1.5" onClick={() => requestArchive(p)} title="Archivar plan"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             </div>
-            <p className="text-2xl font-bold text-brand-400">{formatCurrency(p.price)}</p>
-            <p className="text-xs text-gray-500">{p.duration_days} días</p>
+            <div className="flex items-end justify-between gap-3">
+              <p className="text-2xl font-bold text-brand-400">{formatCurrency(p.price)}</p>
+              <span className="rounded-full border border-gray-700 bg-gray-950/40 px-2.5 py-1 text-[11px] text-gray-400">
+                {p.duration_days} días
+              </span>
+            </div>
             {assignedTo(p.id) > 0 && (
               <p className="text-xs text-gray-400 mt-1">{assignedTo(p.id)} miembro{assignedTo(p.id) === 1 ? '' : 's'} asignado{assignedTo(p.id) === 1 ? '' : 's'}</p>
             )}
-            {p.description && <p className="text-sm text-gray-400 mt-2">{p.description}</p>}
+            {p.description && (
+              <p className="text-sm leading-relaxed text-gray-300 mt-4 border-l-2 border-brand-500/50 pl-3">
+                {p.description}
+              </p>
+            )}
             {p.features?.length > 0 && (
-              <ul className="mt-2 space-y-1">
+              <ul className="mt-4 space-y-2.5 border-t border-gray-800 pt-4">
                 {p.features.map((f, i) => (
-                  <li key={i} className="text-xs text-gray-400 flex items-center gap-1.5">
-                    <Check className="w-3 h-3 text-emerald-400 flex-shrink-0" />{f}
+                  <li key={i} className="text-sm leading-relaxed text-gray-300 flex items-start gap-2.5 rounded-xl border border-gray-800/80 bg-gray-950/30 px-3 py-2.5">
+                    <span className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-emerald-500/10">
+                      <Check className="w-3.5 h-3.5 text-emerald-400" />
+                    </span>
+                    <span>{f}</span>
                   </li>
                 ))}
               </ul>
@@ -138,8 +153,15 @@ export function AdminPlans({ plans, members, gymId, onRefresh }) {
             <div><label className="label">Duración (días)</label>
               <input type="number" className="input" value={form.duration_days} onChange={e => setForm({ ...form, duration_days: e.target.value })} /></div>
           </div>
-          <div><label className="label">Beneficios (separados por coma)</label>
-            <input className="input" placeholder="Acceso 24h, Clases grupales, Nutrición" value={form.features} onChange={e => setForm({ ...form, features: e.target.value })} /></div>
+          <div><label className="label">Beneficios</label>
+            <textarea
+              className="input min-h-36 resize-y leading-relaxed"
+              placeholder={'Acceso a todas las máquinas\nToma de medidas mensual\nRegistro digital de progreso'}
+              value={form.features}
+              onChange={e => setForm({ ...form, features: e.target.value })}
+            />
+            <p className="text-xs text-gray-500 mt-1.5">Escribe un beneficio por línea. Las comas dentro del beneficio se conservarán.</p>
+          </div>
           <button className="btn-primary w-full" onClick={handleSave} disabled={saving}>
             {saving ? 'Guardando...' : editing ? 'Actualizar plan' : 'Crear plan'}
           </button>
