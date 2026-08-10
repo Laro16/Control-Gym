@@ -200,7 +200,7 @@ export const getMembers = async () => {
     .from('members')
     .select(`
       *,
-      profile:profiles(*),
+      profile:profiles!members_profile_id_fkey(*),
       plan:plans(*)
     `)
     .order('created_at', { ascending: false })
@@ -212,7 +212,7 @@ export const getMemberByProfile = async (profileId) => {
     .from('members')
     .select(`
       *,
-      profile:profiles(*),
+      profile:profiles!members_profile_id_fkey(*),
       plan:plans(*)
     `)
     .eq('profile_id', profileId)
@@ -252,7 +252,7 @@ export const getPayments = async (memberId = null) => {
   const { data, error } = await fetchAllPages(() => {
     let query = supabase
       .from('payments')
-      .select(`*, member:members(*, profile:profiles(*))`)
+      .select(`*, member:members(*, profile:profiles!members_profile_id_fkey(*))`)
       .order('due_date', { ascending: false })
       .order('id', { ascending: false })
     if (memberId) query = query.eq('member_id', memberId)
