@@ -82,3 +82,11 @@ test('el administrador entra sin MFA pero conserva autorización por rol y gimna
   assert.match(migration, /p\.role = 'admin' and p\.gym_id is not null/)
   assert.match(config, /\[functions\.admin-users\][\s\S]*verify_jwt = false/)
 })
+
+test('las consultas members-profiles especifican la relación del propietario', () => {
+  const frontend = read('src/supabase.jsx')
+  const edge = read('supabase/functions/admin-users/index.ts')
+  assert.equal(/profile:profiles\((?:\*|role)\)/.test(frontend), false)
+  assert.match(frontend, /profile:profiles!members_profile_id_fkey\(\*\)/)
+  assert.match(edge, /profile:profiles!members_profile_id_fkey\(role\)/)
+})
