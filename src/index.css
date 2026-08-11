@@ -616,7 +616,7 @@ html, body {
 /* La ficha del miembro deja libre la navegación inferior y mantiene siempre
    visible la acción de cerrar sesión, incluso en pantallas móviles pequeñas. */
 .member-account-panel {
-  bottom: calc(5.75rem + env(safe-area-inset-bottom));
+  bottom: calc(5.75rem + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   max-height: none;
