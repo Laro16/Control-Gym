@@ -613,6 +613,23 @@ html, body {
 .light-mode .admin-quick-checkin { background: #f0f9ff !important; }
 .light-mode .admin-quick-reports { background: #faf5ff !important; }
 
+/* La ficha del miembro deja libre la navegación inferior y mantiene siempre
+   visible la acción de cerrar sesión, incluso en pantallas móviles pequeñas. */
+.member-account-panel {
+  bottom: calc(5.75rem + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  max-height: none;
+  overflow: hidden;
+}
+
+@media (min-width: 640px) {
+  .member-account-panel {
+    bottom: auto;
+    max-height: calc(100dvh - 5rem);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .admin-kpi-card:hover,
   .admin-quick-action:hover,
