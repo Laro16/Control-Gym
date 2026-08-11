@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Camera, Lock, LogOut, X, Check, Eye, EyeOff, Settings } from 'lucide-react'
 import { supabase, validateImageFile } from '../supabase'
+import { recordMyAuditEvent } from '../audit'
 import { formatDate } from '../utils/helpers'
 
 export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh }) {
@@ -77,6 +78,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
     if (error) {
       setMsg({ text: 'Error: ' + error.message, ok: false })
     } else {
+      await recordMyAuditEvent('account.password_changed')
       setMsg({ text: '¡Contraseña actualizada!', ok: true })
       setNewPassword('')
       setConfirmPass('')

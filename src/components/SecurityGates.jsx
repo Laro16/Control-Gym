@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertCircle, KeyRound, LogOut } from 'lucide-react'
 import { completeInitialPasswordChange, updateCurrentPassword } from '../supabase'
+import { recordMyAuditEvent } from '../audit'
 
 const PasswordForm = ({ title, subtitle, buttonLabel, onSubmit, onLogout }) => {
   const [password, setPassword] = useState('')
@@ -61,6 +62,7 @@ export function ForcePasswordChange({ onComplete, onLogout }) {
     if (passwordError) throw passwordError
     const { error: completionError } = await completeInitialPasswordChange()
     if (completionError) throw completionError
+    await recordMyAuditEvent('account.password_changed')
     onComplete()
   }
   return (
@@ -78,6 +80,7 @@ export function RecoveryPasswordGate({ onComplete, onLogout }) {
   const save = async (password) => {
     const { error } = await updateCurrentPassword(password)
     if (error) throw error
+    await recordMyAuditEvent('account.password_changed')
     onComplete()
   }
   return (

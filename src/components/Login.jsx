@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { requestPasswordReset, signIn } from '../supabase'
+import { recordMyAuditEvent } from '../audit'
 import { Dumbbell, Eye, EyeOff, AlertCircle } from 'lucide-react'
 
 export default function Login({ notice = '' }) {
@@ -34,6 +35,8 @@ export default function Login({ notice = '' }) {
       setLoading(false)
       return
     }
+
+    await recordMyAuditEvent('session.login')
 
     // No hacemos nada más aquí.
     // onAuthStateChange en App.jsx detecta el SIGNED_IN y navega automáticamente.
