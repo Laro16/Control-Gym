@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, lazy, Suspense } from 'react'
 import { supabase, signOut } from './supabase'
+import { recordMyAuditEvent } from './audit'
 import Login from './components/Login'
 import { Toaster, PageSkeleton } from './components/shared'
 import { ForcePasswordChange, RecoveryPasswordGate } from './components/SecurityGates'
@@ -126,6 +127,7 @@ export default function App() {
   }, [])
 
   const handleLogout = async () => {
+    await recordMyAuditEvent('session.logout')
     profileRef.current = null; setProfile(null); setRecovery(false); setStatus('login')
     await signOut()
   }
