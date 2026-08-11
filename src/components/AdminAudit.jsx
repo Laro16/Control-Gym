@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
   CalendarCheck, Camera, CreditCard, Dumbbell, History, LogIn,
-  Megaphone, RefreshCw, Ruler, Search, Settings, ShieldCheck, Users,
+  Download, Loader2, Megaphone, RefreshCw, Ruler, Search, Settings, ShieldCheck, Users,
 } from 'lucide-react'
 import { getAuditEvents } from '../audit'
+import { generateAuditReportExcel } from '../utils/excelExports'
 import { EmptyState, Spinner, toast } from './shared'
 
 const labels = {
@@ -109,11 +110,12 @@ const detailText = event => {
 const actorName = event => event.actor_name
   || (event.actor_profile_id ? `Usuario ${event.actor_profile_id.slice(0, 8)}` : 'Sistema')
 
-export function AdminAudit() {
+export function AdminAudit({ gym }) {
   const [events, setEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState('all')
   const [query, setQuery] = useState('')
+  const [exporting, setExporting] = useState(false)
 
   const load = async () => {
     setLoading(true)
@@ -139,6 +141,20 @@ export function AdminAudit() {
     })
   }, [events, filter, query])
 
+  const exportReport = async () => {
+    if (exporting || !visibleEvents.length) return
+    setExporting(true)
+    try {
+      await generateAuditReportExcel(visibleEvents, gym)
+      toast.success('Reporte de Bitácora descargado')
+    } catch (error) {
+      console.error('Error al generar reporte de bitácora:', error)
+      toast.error(error?.message || 'No se pudo generar el reporte')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   if (loading) return <Spinner />
   return (
     <div className="space-y-4 animate-fade-in">
@@ -151,9 +167,21 @@ export function AdminAudit() {
             Quién realizó cada acción importante y cuándo ocurrió.
           </p>
         </div>
-        <button className="btn-secondary self-start sm:self-auto" onClick={load}>
-          <RefreshCw className="w-4 h-4" /> Actualizar
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="btn-primary"
+            onClick={exportReport}
+            disabled={exporting || !visibleEvents.length}
+          >
+            {exporting
+              ? <Loader2 className="w-4 h-4 animate-spin" />
+              : <Download className="w-4 h-4" />}
+            {exporting ? 'Generando...' : 'Reporte Excel'}
+          </button>
+          <button className="btn-secondary" onClick={load} disabled={exporting}>
+            <RefreshCw className="w-4 h-4" /> Actualizar
+          </button>
+        </div>
       </div>
 
       <div className="card space-y-3">

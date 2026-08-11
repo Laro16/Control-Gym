@@ -406,8 +406,8 @@ export function AdminDashboard({ profile, onLogout, darkMode, onToggleDark }) {
             {tab === 'payments' && <AdminPayments payments={payments} onRefresh={loadData} gym={gym} />}
             {tab === 'plans'    && <AdminPlans plans={plans} members={members} gymId={profile.gym_id} onRefresh={loadData} />}
             {tab === 'stats'         && <AdminStats         members={members} payments={payments} />}
-            {tab === 'reports'       && <AdminReports       members={members} payments={payments} />}
-            {tab === 'audit'         && <AdminAudit />}
+            {tab === 'reports'       && <AdminReports       members={members} payments={payments} plans={plans} gym={gym} />}
+            {tab === 'audit'         && <AdminAudit gym={gym} />}
             {tab === 'announcements' && <AdminAnnouncements profileId={profile.id} gymId={profile.gym_id} onRefresh={loadData} />}
             {tab === 'checkin'       && (
               <div className="space-y-8">

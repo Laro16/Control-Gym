@@ -5,11 +5,11 @@ import {
 } from '../utils/pdfExports'
 import {
   generatePaymentHistoryExcel,
-  generateMasterExcel,
+  generateGeneralReportExcel,
 } from '../utils/excelExports'
 import { toast } from './shared'
 
-export function AdminReports({ members, payments }) {
+export function AdminReports({ members, payments, plans, gym }) {
   const [selectedMember, setSelectedMember] = useState('')
   const [exporting, setExporting] = useState(null)
 
@@ -41,21 +41,21 @@ export function AdminReports({ members, payments }) {
       <h2 className="section-title">Reportes</h2>
 
       <div className="card">
-        <h3 className="font-semibold text-white mb-3">Reporte global</h3>
+        <h3 className="font-semibold text-white mb-3">Reporte General</h3>
         <p className="text-sm text-gray-400 mb-4">
-          Descarga en un solo Excel las hojas de miembros y pagos del gimnasio.
+          Incluye un resumen ejecutivo y hojas detalladas de miembros, pagos y planes.
         </p>
         <button
           className="btn-primary"
           disabled={!!exporting}
           onClick={() => runExport(
-            'master-excel',
-            () => generateMasterExcel(members, payments),
-            'Reporte global descargado',
+            'general-excel',
+            () => generateGeneralReportExcel(members, payments, plans, gym),
+            'Reporte General descargado',
           )}
         >
-          <ExportIcon id="master-excel" icon={FileSpreadsheet} />
-          {exporting === 'master-excel' ? 'Generando Excel...' : 'Descargar Excel maestro'}
+          <ExportIcon id="general-excel" icon={FileSpreadsheet} />
+          {exporting === 'general-excel' ? 'Generando Reporte...' : 'Descargar Reporte General'}
         </button>
       </div>
 
