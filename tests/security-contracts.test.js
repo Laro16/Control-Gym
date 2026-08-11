@@ -99,3 +99,45 @@ test('los beneficios de planes se editan y muestran como elementos separados', (
   assert.match(plans, /divide-y divide-gray-800\/70/)
   assert.match(plans, /items-start gap-2 py-1\.5/)
 })
+
+test('la ficha móvil se monta fuera del header y deja visible cerrar sesión', () => {
+  const dashboard = read('src/components/UserDashboard.jsx')
+  const account = read('src/components/UserAccount.jsx')
+  const styles = read('src/index.css')
+  const headerEnd = dashboard.indexOf('</header>')
+  const panelRender = dashboard.indexOf('{showAccount && (', headerEnd)
+
+  assert.ok(headerEnd >= 0 && panelRender > headerEnd)
+  assert.equal(account.includes('sm:absolute'), false)
+  assert.match(account, /flex-shrink-0 pt-3 mt-3 border-t/)
+  assert.match(styles, /bottom: calc\(5\.75rem \+ env\(safe-area-inset-bottom, 0px\)\)/)
+})
+
+test('la bitácora conserva al responsable y cubre cambios directos', () => {
+  const sql = read('supabase/migrations/20260810_comprehensive_audit_log.sql')
+  for (const column of ['actor_name', 'actor_email', 'actor_role']) {
+    assert.match(sql, new RegExp(`add column if not exists ${column}`))
+  }
+  for (const trigger of [
+    'audit_profiles_update', 'audit_gyms_update', 'audit_measurements_change',
+    'audit_progress_photos_change', 'audit_announcements_change',
+    'audit_attendance_admin_change',
+  ]) {
+    assert.match(sql, new RegExp(`create trigger ${trigger}`))
+  }
+  assert.match(sql, /p_action not in \('session\.login', 'session\.logout', 'account\.password_changed'\)/)
+  assert.match(sql, /- 'password' - 'new_password' - 'token' - 'token_value'/)
+  assert.match(sql, /revoke insert, update, delete on public\.audit_events/)
+})
+
+test('la bitácora administrativa muestra usuario, correo y detalles legibles', () => {
+  const audit = read('src/components/AdminAudit.jsx')
+  const login = read('src/components/Login.jsx')
+  const app = read('src/App.jsx')
+  assert.match(audit, /event\.actor_name/)
+  assert.match(audit, /event\.actor_email/)
+  assert.match(audit, /Administrador/)
+  assert.equal(audit.includes('JSON.stringify(event.details'), false)
+  assert.match(login, /recordMyAuditEvent\('session\.login'\)/)
+  assert.match(app, /recordMyAuditEvent\('session\.logout'\)/)
+})
