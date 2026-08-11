@@ -186,16 +186,19 @@ export function UserDashboard({ profile, onLogout, darkMode, onToggleDark, onPro
             }
           </div>
         )}
-        {showAccount && (
-          <UserAccountPanel
-            profile={profile}
-            member={member}
-            onClose={() => setShowAccount(false)}
-            onLogout={onLogout}
-            onRefresh={loadData}
-          />
-        )}
       </header>
+
+      {/* Fuera del header: backdrop-filter del encabezado convierte a sus hijos
+          fixed en elementos relativos al propio header en algunos Android. */}
+      {showAccount && (
+        <UserAccountPanel
+          profile={profile}
+          member={member}
+          onClose={() => setShowAccount(false)}
+          onLogout={onLogout}
+          onRefresh={loadData}
+        />
+      )}
 
       {/* TOP NAV — solo desktop */}
       <nav className="hidden md:block lm-nav border-b border-gray-800 sticky top-[65px] z-30">

@@ -110,7 +110,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
 
   return (
     <div
-      className="member-account-panel fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-4 sm:top-16 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up"
+      className="member-account-panel fixed left-2 right-2 top-[4.5rem] sm:left-auto sm:right-4 sm:top-16 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up"
       onClick={e => e.stopPropagation()}
     >
       {/* ── AVATAR + NOMBRE ─────────────────────────────────── */}
