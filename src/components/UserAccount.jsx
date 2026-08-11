@@ -110,7 +110,7 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
 
   return (
     <div
-      className="fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-4 sm:top-16 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up max-h-[calc(100dvh-5rem)] overflow-y-auto"
+      className="member-account-panel fixed left-2 right-2 top-[4.5rem] sm:absolute sm:left-auto sm:right-4 sm:top-16 sm:w-80 card border border-gray-700 shadow-2xl z-50 animate-slide-up"
       onClick={e => e.stopPropagation()}
     >
       {/* ── AVATAR + NOMBRE ─────────────────────────────────── */}
@@ -197,6 +197,8 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
         ))}
       </div>
 
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain pr-1">
+
       {/* ── FICHA ─────────────────────────────────────────── */}
       {tab === 'profile' && (
         <div className="space-y-0.5">
@@ -219,17 +221,9 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
             </div>
           ))}
 
-          <div className="pt-4">
-            <p className="text-[10px] text-gray-600 text-center mb-3">
-              Para actualizar tus datos personales contacta al administrador
-            </p>
-            <button
-              onClick={() => { onClose(); onLogout() }}
-              className="w-full flex items-center justify-center gap-2 text-red-400 hover:text-red-300 text-sm py-2.5 rounded-xl hover:bg-red-500/10 border border-red-500/20 transition-all"
-            >
-              <LogOut className="w-4 h-4" /> Cerrar sesión
-            </button>
-          </div>
+          <p className="text-[10px] text-gray-600 text-center pt-4 pb-2">
+            Para actualizar tus datos personales contacta al administrador
+          </p>
         </div>
       )}
 
@@ -378,6 +372,16 @@ export function UserAccountPanel({ profile, member, onClose, onLogout, onRefresh
           </button>
         </div>
       )}
+      </div>
+
+      <div className="flex-shrink-0 pt-3 mt-3 border-t border-gray-800 bg-gray-900">
+        <button
+          onClick={() => { onClose(); onLogout() }}
+          className="w-full flex items-center justify-center gap-2 text-red-400 hover:text-red-300 text-sm py-2.5 rounded-xl hover:bg-red-500/10 border border-red-500/20 transition-all"
+        >
+          <LogOut className="w-4 h-4" /> Cerrar sesión
+        </button>
+      </div>
     </div>
   )
 }
